@@ -69,7 +69,10 @@ if ($token && $aesKey && ctype_xdigit($aesKey)) {
 <body>
   <div class="container">
     <?php if ($decrypted !== null): ?>
-      <h1>Il tuo segreto:</h1>
+	  <h1>SayNoMore</h1>
+	  <br>
+      <h2>Il tuo segreto:</h2>
+	  <br>
       <textarea class="secret-text" readonly><?php
         echo htmlspecialchars($decrypted, ENT_QUOTES, 'UTF-8');
       ?></textarea>
