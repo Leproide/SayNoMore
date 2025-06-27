@@ -1,6 +1,6 @@
 # SayNoMore
 
-![4ed6d010-cdde-41d1-8a37-24849bf8711b](https://github.com/user-attachments/assets/035114f4-35ef-4125-a63d-015cb7a380cd)
+![c4b311a6-165e-437a-b2af-3d02f8bf007f](https://github.com/user-attachments/assets/7d2c6928-2344-41e8-ab6a-c9ae7ce6c8a3)
 
 SayNoMore è un semplice servizio One Time Secret per condividere password o informazioni sensibili visualizzabili una sola volta. 
 
