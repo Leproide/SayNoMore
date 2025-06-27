@@ -32,6 +32,7 @@ https://saynomore.muninn.ovh
 ## ⚠ Attenzione
 
 Tutto quello che pubblico esiste perchè serviva a me prima di tutto, non sono uno sviluppatore e potrebbero esserci bug anche critici.
+
 Utilizzate quanto metto a disposizione senza garanzia alcuna
 
 # Screenshot
