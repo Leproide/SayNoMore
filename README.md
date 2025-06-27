@@ -34,5 +34,5 @@ Copia il link con il pulsante Copy, o a mano se preferisci
 ![immagine](https://github.com/user-attachments/assets/e3e0670c-333e-400b-a7cb-7faf429c74cb)
 
 Invia il link al destinatario, una volta aperto lo vedrà in questo modo
-![immagine](https://github.com/user-attachments/assets/6a076f49-736f-45ce-854c-7ba557f6f2f5)
+![immagine](https://github.com/user-attachments/assets/0119ef77-1b1b-45ef-b4b6-591c4b65d502)
 
