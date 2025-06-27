@@ -8,7 +8,7 @@ SayNoMore è un semplice servizio One Time Secret per condividere password o inf
 
 - ✉️ Segreti leggibili solo una volta
 - 🧼 Distruzione automatica dopo la lettura (con sovrascrittura a zeri)
-- 🔒 Cifratura AES-256-CBC lato server
+- 🔒 Cifratura AES-256-CBC
 - 🧠 Zero knowledge: la chiave di decrittazione non viene mai salvata
 - 💻 Nessun database richiesto, solo file system
 
