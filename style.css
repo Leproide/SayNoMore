@@ -1,0 +1,178 @@
+/* style.css – DARK THEME + BACKGROUND + GLASS EFFECT */
+
+/* Reset e box-sizing */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Palette colori */
+:root {
+    --bg-page:      #1B1F3A;
+    --bg-card:      #232743;
+    --bg-input:     #2A2F4A;
+    --border-input: #3B3F5C;
+    --text-primary: #E5E9F0;
+    --text-secondary: #A5A8C5;
+    --blue-accent:  #4A76D9;
+    --blue-hover:   #3B5FAA;
+    --footer-bg:    #232743;
+}
+
+/* Pagina e font */
+html, body {
+    height: 100%;
+    font-family: Arial, sans-serif;
+    background: 
+        linear-gradient(rgba(27, 31, 58, 0.45), rgba(27, 31, 58, 0.45)), 
+        url('background.webp');
+    background-size: cover;
+    background-position: center;
+    color: var(--text-primary);
+}
+
+/* Centra la card */
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 4rem;
+}
+
+/* Card principale con effetto glass */
+.container {
+    width: 100%;
+    max-width: 500px;
+    background: rgba(35, 39, 67, 0.4);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Titolo */
+h1 {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    font-size: 1.75rem;
+    color: var(--text-primary);
+}
+
+/* Textarea opaca */
+textarea {
+    width: 100%;
+    height: 360px;
+    padding: 1rem;
+    font-size: 1rem;
+    line-height: 1.4;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-input);
+    border-radius: 4px;
+    resize: vertical;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin-bottom: 1.5rem;
+}
+
+/* Bottoni */
+button {
+    display: inline-block;
+    padding: .75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    background: var(--blue-accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background .15s ease;
+    text-decoration: none;
+}
+button:hover {
+    background: var(--blue-hover);
+}
+
+/* Link Box */
+.link-box {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 1.5rem;
+}
+.link-box input {
+    width: 100%;
+    padding: .75rem;
+    font-size: 1rem;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-input);
+    border-radius: 4px;
+}
+.link-box button {
+    margin-top: 1rem;
+    width: auto;
+}
+
+/* Bottone principale */
+button.generate {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+/* Footer glass */
+footer {
+    width: 100%;
+    padding: 1rem 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    text-align: center;
+    background: rgba(35, 39, 67, 0.35);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+footer .footer-content {
+    max-width: 500px;
+    margin: 0 auto;
+    text-align: center;
+    font-size: .9rem;
+    color: var(--text-secondary);
+}
+footer a {
+    color: #FFFFFF;
+    text-decoration: none;
+}
+footer a:hover {
+    text-decoration: underline;
+}
+
+/* Responsive mobile */
+@media (max-width: 400px) {
+    .container {
+        padding: 1.5rem 1rem;
+    }
+    h1 {
+        font-size: 1.5rem;
+    }
+    textarea {
+        height: 280px;
+    }
+    .actions {
+        text-align: center;
+        margin-top: 1rem;
+    }
+    .actions button {
+        display: block;
+        margin: 0 auto;
+    }
+}
