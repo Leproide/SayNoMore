@@ -62,7 +62,7 @@ if ($token && $aesKey && ctype_xdigit($aesKey)) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Simple One Time Secret - Visualizza</title>
+  <title>SayNoMore - Visualizza</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="favicon.ico" type="image/x-icon">
 </head>
