@@ -25,6 +25,10 @@ SayNoMore è un semplice servizio One Time Secret per condividere password o inf
 - Estensione OpenSSL abilitata
 - Server web con permessi di scrittura nella cartella `/data`
 
+## 🔗 Demo
+
+https://saynomore.muninn.ovh
+
 # Screenshot
 
 Scrivi il suo segreto e genera il link
