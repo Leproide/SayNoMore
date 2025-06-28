@@ -14,10 +14,10 @@ SayNoMore è un semplice servizio One Time Secret per condividere password o inf
 
 ## 🚀 Come funziona
 
-1. Inserisci un messaggio nel form
+1. Inserisci un messaggio e una password nel form
 2. Ottieni un link contenente token + chiave
 3. Invia il link a chi vuoi
-4. Il segreto si autodistrugge dopo l’apertura
+4. Il segreto si autodistrugge dopo l’apertura o l'inserimento di una password errata
 
 ## 🛠️ Requisiti
 
