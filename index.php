@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['secret']) && !empty(
         <input 
           type="password" 
           name="passphrase" 
-          placeholder="Password di visione" 
+          placeholder="Inserisci una password" 
           required 
           style="
             width:100%;
