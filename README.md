@@ -23,7 +23,7 @@ SayNoMore è un semplice servizio One Time Secret per condividere password o inf
 
 - PHP 7.4+
 - Estensione OpenSSL abilitata
-- Server web con permessi di scrittura nella cartella `/data`
+- Server web con permessi di scrittura nella cartella `data`
 
 ## 🔗 Demo
 
