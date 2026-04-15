@@ -8,7 +8,6 @@
     No warranty is provided
 -->
 
-
 <?php
 // view.php – sblocca e decripta con passphrase onetime hashed
 
@@ -19,9 +18,17 @@ $aesKey  = $_GET['key']   ?? '';
 $decrypted = null;
 $error     = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $inputPass = trim($_POST['view_pass']);
-    $sessPass  = $inputPass; // Temporaneo, useremo subito l'hash
+// FIX #1 – Valida token: solo hex 32 char (bin2hex(random_bytes(16)))
+// Blocca path traversal e qualsiasi token non legittimo
+if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
+    http_response_code(400);
+    die('Token non valido.');
+}
+
+// FIX #2 – Valida aesKey: solo hex 64 char, già qui prima di qualsiasi operazione
+if (!ctype_xdigit($aesKey) || strlen($aesKey) !== 64) {
+    http_response_code(400);
+    die('Chiave non valida.');
 }
 
 // se non ho ancora POST, mostro il form
@@ -41,39 +48,82 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// se POST, procedo
-if ($token && file_exists("{$storage}/{$token}")) {
-    $raw  = file_get_contents("{$storage}/{$token}");
-    $data = base64_decode($raw);
-    list($iv_ct, $storedHash) = explode('::', $data, 2);
+// FIX #3 – Rate limiting per token: max 5 tentativi falliti
+$attemptsFile = "{$storage}/.attempts_{$token}";
+$attempts = 0;
+if (file_exists($attemptsFile)) {
+    $attempts = (int)file_get_contents($attemptsFile);
+}
+if ($attempts >= 5) {
+    // Troppi tentativi: cancella il segreto e blocca
+    @unlink("{$storage}/{$token}");
+    @unlink($attemptsFile);
+    http_response_code(429);
+    die('Troppi tentativi falliti. Il segreto è stato distrutto.');
+}
 
-    // confronto hash
-    if (hash('sha512', $inputPass) !== $storedHash) {
-        $error = '<h1>Password errata</h1>';
+$inputPass = trim($_POST['view_pass'] ?? '');
+
+// FIX #3 – Race condition: usa lock esclusivo sul file
+$filePath = "{$storage}/{$token}";
+
+if (file_exists($filePath)) {
+    $fp = fopen($filePath, 'r+');
+    if (!$fp || !flock($fp, LOCK_EX | LOCK_NB)) {
+        // Un'altra richiesta sta già processando questo token
+        if ($fp) fclose($fp);
+        http_response_code(409);
+        die('Richiesta in corso, riprova.');
+    }
+
+    $raw  = stream_get_contents($fp);
+    $data = base64_decode($raw);
+
+    // Separa IV+ciphertext dall'hash della passphrase
+    $parts = explode('::', $data, 2);
+    if (count($parts) !== 2) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        $error = 'Dati corrotti.';
     } else {
-        // decripto
-        if ($aesKey && ctype_xdigit($aesKey) && strlen($aesKey)===64) {
+        list($iv_ct, $storedHash) = $parts;
+
+        if (hash('sha512', $inputPass) !== $storedHash) {
+            // FIX #4 – Password errata: NON cancellare, incrementa tentativi
+            flock($fp, LOCK_UN);
+            fclose($fp);
+            file_put_contents($attemptsFile, $attempts + 1);
+            $error = 'Password errata.';
+        } else {
+            // Password corretta: decripta
             $cipher = 'aes-256-cbc';
             $ivLen  = openssl_cipher_iv_length($cipher);
             $iv     = substr($iv_ct, 0, $ivLen);
             $ct     = substr($iv_ct, $ivLen);
             $decrypted = openssl_decrypt($ct, $cipher, hex2bin($aesKey), OPENSSL_RAW_DATA, $iv);
+
+            // FIX #3 – Secure delete SOLO dopo decrittazione riuscita, dentro il lock
+            rewind($fp);
+            $size = filesize($filePath);
+            if ($size > 0) {
+                $chunk = str_repeat("\0", min(1024 * 1024, $size));
+                $w = 0;
+                while ($w < $size) {
+                    $to = min(1024 * 1024, $size - $w);
+                    fwrite($fp, substr($chunk, 0, $to));
+                    $w += $to;
+                }
+                fflush($fp);
+            }
+            flock($fp, LOCK_UN);
+            fclose($fp);
+            unlink($filePath);
+            @unlink($attemptsFile);
         }
     }
-    // secure delete
-    $fp = fopen("{$storage}/{$token}", 'r+');
-    if ($fp) {
-        $size=filesize("{$storage}/{$token}");
-        rewind($fp);
-        $chunk=str_repeat("\0",1024*1024); $w=0;
-        while($w<$size){ $to=min(1024*1024,$size-$w); fwrite($fp,substr($chunk,0,$to)); $w+=$to; }
-        fflush($fp); fclose($fp);
-    }
-    unlink("{$storage}/{$token}");
 } else {
     $error = 'Link invalido o già usato.';
 }
-
 ?>
 <!DOCTYPE html>
 <html lang="it">
@@ -87,7 +137,7 @@ if ($token && file_exists("{$storage}/{$token}")) {
   <div class="container">
     <?php if ($error): ?>
       <h1>Errore</h1>
-      <p><?php echo $error; ?></p>
+      <p><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></p>
       <div class="actions">
         <form action="index.php" method="get"><button type="submit" class="generate">Home</button></form>
       </div>
