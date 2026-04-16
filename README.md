@@ -37,12 +37,12 @@ Utilizzate quanto metto a disposizione senza garanzia alcuna
 
 # Screenshot
 
-Scrivi il suo segreto e genera il link
+Scrivi il tuo segreto, scegli una password e genera il link
 ![immagine](https://github.com/user-attachments/assets/b967a27f-b716-4c09-ba2e-b09d71696cd0)
 
-Copia il link con il pulsante Copy, o a mano se preferisci
+Copia il link con il pulsante Copy, o a mano se preferisci, invialo al destinatario
 ![immagine](https://github.com/user-attachments/assets/e3e0670c-333e-400b-a7cb-7faf429c74cb)
 
-Invia il link al destinatario, una volta aperto e inserita la password lo vedrà in questo modo
+Una volta aperto e inserita la password lo vedrà in questo modo
 ![immagine](https://github.com/user-attachments/assets/0119ef77-1b1b-45ef-b4b6-591c4b65d502)
 
