@@ -81,7 +81,7 @@ Utilizzate quanto metto a disposizione senza garanzia alcuna.
 # Screenshot
 
 Scrivi il tuo segreto, scegli una password e genera il link
-![immagine](https://github.com/user-attachments/assets/b967a27f-b716-4c09-ba2e-b09d71696cd0)
+![immagine](https://github.com/user-attachments/assets/28155680-04e3-44ac-9b79-4680f1b34dcd)
 
 Copia il link con il pulsante Copy, o a mano se preferisci, invialo al destinatario
 ![immagine](https://github.com/user-attachments/assets/e3e0670c-333e-400b-a7cb-7faf429c74cb)
