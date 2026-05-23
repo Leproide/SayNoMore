@@ -31,7 +31,7 @@ https://saynomore.muninn.ovh
 
 ## ⚠ Attenzione
 
-Tutto quello che pubblico esiste perchè serviva a me prima di tutto, non sono uno sviluppatore e potrebbero esserci bug anche critici.
+Tutto quello che pubblico esiste perchè serviva a me prima di tutto, non sono uno sviluppatore e potrebbero esserci bug anche critici per quanto tutto il codice è stato passato su più LLM (Claude, GPT, DeepSeek) alla ricerca di vulnerabilità e dovrebbe essere pulito.
 
 Utilizzate quanto metto a disposizione senza garanzia alcuna
 
