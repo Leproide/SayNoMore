@@ -6,20 +6,22 @@ SayNoMore è un semplice servizio One Time Secret per condividere password o inf
 
 ## 🔐 Caratteristiche
 
-- ✉️ Segreti leggibili solo una volta protetti da password (hashing Argon2id)
-- 🧼 Distruzione automatica dopo la lettura (con sovrascrittura best effort, vedi nota sotto)
+- ✉️ Segreti leggibili solo una volta protetti da password (hashing Argon2id, salt automatico)
 - 🔒 Cifratura AES-256-GCM con tag di autenticazione (rileva manomissioni del ciphertext)
 - 🧠 Zero knowledge reale: la chiave di decrittazione viaggia nel fragment URL (`#`) e non viene mai inviata al server tramite il link
-- ⏳ I segreti non letti scadono automaticamente dopo 7 giorni
+- ⏳ Scadenza configurabile dall'utente: da 1 a 30 giorni (default 7)
+- 🧹 Pulizia automatica: i segreti scaduti vengono rimossi in background, niente accumulo
+- 🧼 Distruzione dopo lettura (con sovrascrittura best effort, vedi note sotto)
+- 🛡 Mitigazioni anti-abuso: limite 64 KB per segreto, max 5 tentativi password, timing uniforme contro l'enumerazione dei token
 - 💻 Nessun database richiesto, solo file system
 
 ## 🚀 Come funziona
 
-1. Inserisci un messaggio e una password nel form
+1. Inserisci un messaggio, una password e scegli per quanti giorni il link deve restare valido
 2. Ottieni un link nella forma `view.php?token=...#chiave`
 3. Invia il link a chi vuoi
 4. Il destinatario apre il link, inserisce la password e legge il segreto
-5. Il segreto si autodistrugge dopo l'apertura, dopo 5 tentativi falliti, o dopo 7 giorni di inattività
+5. Il segreto si autodistrugge dopo l'apertura, dopo 5 tentativi falliti, o alla scadenza scelta
 
 ## 🛠️ Requisiti
 
@@ -29,16 +31,34 @@ SayNoMore è un semplice servizio One Time Secret per condividere password o inf
 - Server web con permessi di scrittura, lo script creerà la cartella `data`
 - HTTPS configurato a livello webserver (raccomandato, vedi sezione sicurezza)
 - JavaScript abilitato lato client (necessario per leggere la chiave dal fragment)
+- Filesystem locale (ext4, xfs, btrfs, ntfs). Su NFS/SMB il file locking non è garantito.
+
+## ⚙️ Configurazione
+
+I principali parametri sono costanti in cima a `index.php` e `view.php`:
+
+| Costante | File | Default | Descrizione |
+|---|---|---|---|
+| `DEFAULT_TTL_DAYS` | index.php | 7 | Giorni di validità di default per i nuovi segreti |
+| `MIN_TTL_DAYS` | index.php | 1 | Minimo TTL selezionabile dall'utente |
+| `MAX_TTL_DAYS` | index.php | 30 | Massimo TTL selezionabile dall'utente |
+| `MAX_SECRET_BYTES` | index.php | 65536 (64 KB) | Limite di dimensione del segreto |
+| `MAX_ATTEMPTS` | view.php | 5 | Numero massimo di tentativi password prima della distruzione |
+| `CLEANUP_PROB_PCT` | entrambi | 50 | Probabilità (%) di eseguire un cleanup globale a ogni richiesta |
+
+Il cleanup globale è probabilistico per ammortizzare il costo: a ogni richiesta c'è il 50% di possibilità che il server scansioni `data/` e rimuova tutti i segreti scaduti e i file temporanei orfani più vecchi di 1 ora. Per un servizio poco trafficato come questo, è un buon compromesso. Se il tuo traffico è molto basso e vuoi essere certo che la pulizia avvenga regolarmente, puoi alzare la percentuale o aggiungere un cron job che chiama una pagina del sito ogni X ore.
 
 ## 🔒 Note di sicurezza importanti
 
 **Chiave nel fragment URL.** La chiave AES sta dopo il `#`, quindi non finisce nei log Apache/nginx, nei referer header, nei sistemi di link preview di Slack/WhatsApp/Telegram, nei log di proxy/CDN/WAF. Resta solo nella history del browser del destinatario fino allo sblocco, dopodiché viene rimossa automaticamente via `history.replaceState`.
 
-**Proteggi la cartella `data/`.** Per default lo script crea `data/` dentro la document root. È **fortemente consigliato** bloccarne l'accesso via web (es. `.htaccess` con `Deny from all` su Apache, o regola `location` di nega su nginx) oppure spostarla fuori dalla document root modificando `$storage` in `index.php` e `view.php`.
+**Proteggi la cartella `data/`.** Lo script crea `data/` dentro la document root. È **fortemente consigliato** bloccarne l'accesso via web (`.htaccess` con `Deny from all` su Apache, o regola `location` di nega su nginx), oppure spostarla fuori dalla document root modificando `$storage` in `index.php` e `view.php`.
 
 **Forza HTTPS.** Lo script non forza HTTPS perché si presume venga fatto a livello webserver. Senza HTTPS, password e chiavi viaggiano in chiaro.
 
 **Sovrascrittura "secure delete" è best effort.** Su filesystem journaled (ext4, NTFS, APFS, XFS), su SSD con wear leveling, e su setup con backup/snapshot, la sovrascrittura a zeri non garantisce l'irrecuperabilità dei dati. Per una protezione seria a riposo, usa un filesystem cifrato.
+
+**Timing attack su enumerazione token.** Per evitare che un attaccante possa distinguere "token esistente" da "token inesistente" misurando i tempi di risposta, ogni richiesta POST esegue una verifica password (reale o dummy) per consumare lo stesso tempo in entrambi i casi.
 
 ## 🔗 Demo
 

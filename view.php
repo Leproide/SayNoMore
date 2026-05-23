@@ -6,16 +6,14 @@
  * Distributed under GNU GPL v2.
  * No warranty provided.
  *
- * Patch notes:
- *  - Chiave AES letta dal FRAGMENT lato JS, inviata al server SOLO via POST
- *  - Password verificata con password_verify (timing-safe, Argon2id)
- *  - AES-256-GCM con verifica del tag (authenticated decryption)
- *  - Rate limit (max 5 tentativi) memorizzato nel file stesso, dentro al lock,
- *    quindi niente race condition possibile
- *  - Cleanup on-access: segreti piu' vecchi di SECRET_TTL vengono distrutti
- *  - Security headers
- *  - session_start() rimosso (mai usato)
- *  - Messaggi di errore piu' uniformi (meno info leak)
+ * Patch notes v3:
+ *  - Cleanup globale probabilistico (50%) anche su questa pagina
+ *  - Scadenza basata su "expires" (timestamp assoluto) salvato nel payload,
+ *    non piu' su filemtime, quindi i tentativi falliti non rinnovano la vita
+ *  - Dummy password_verify nei path di errore precoce, per uniformare
+ *    il tempo di risposta tra "token inesistente" e "password sbagliata"
+ *    (mitigazione di token enumeration via timing attack)
+ *  - Compatibilita' con vecchi payload (campo "created" legacy)
  */
 
 // --- Security headers ---
@@ -24,17 +22,100 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
 header('Permissions-Policy: interest-cohort=()');
+header('Cache-Control: no-store, no-cache, must-revalidate');
 
 // --- Config ---
-const SECRET_TTL     = 7 * 24 * 60 * 60; // 7 giorni
-const MAX_ATTEMPTS   = 5;
-const STORAGE_SUBDIR = '/data';
+const MAX_ATTEMPTS      = 5;
+const STORAGE_SUBDIR    = '/data';
+const CLEANUP_PROB_PCT  = 50;
+const TMP_ORPHAN_TTL    = 3600;
+const LEGACY_TTL_SEC    = 7 * 24 * 60 * 60; // per payload vecchi senza "expires"
+
+/**
+ * Hash Argon2id "dummy" pre-calcolato.
+ * Serve per uniformare i tempi di risposta tra "token inesistente"
+ * (caso veloce) e "password errata" (caso lento per via di password_verify).
+ * I parametri (m=65536, t=4, p=1) sono quelli di default di PHP 7.4+ per Argon2id;
+ * se in futuro PHP cambiasse i default e i nuovi segreti usassero parametri piu'
+ * costosi, questo dummy sarebbe leggermente piu' veloce e fornirebbe un segnale
+ * residuo. Per ora e' una mitigazione robusta.
+ */
+const DUMMY_HASH = '$argon2id$v=19$m=65536,t=4,p=1$cTlTSUtPTW96N0RxWEVBNQ$u1JqJ9F/mRRhHp0mmX9HsCM5b0qz+gy2YaUu8JbzPpk';
 
 $storage = __DIR__ . STORAGE_SUBDIR;
 $token   = $_GET['token'] ?? '';
 
 $decrypted = null;
 $error     = '';
+
+/**
+ * Cleanup globale (stesso codice di index.php, duplicato per evitare un require).
+ */
+function snm_cleanup_expired(string $storage): void {
+    if (!is_dir($storage)) return;
+    $dh = @opendir($storage);
+    if (!$dh) return;
+
+    $now = time();
+    while (($entry = readdir($dh)) !== false) {
+        if ($entry === '.' || $entry === '..') continue;
+        $path = $storage . '/' . $entry;
+        if (!is_file($path)) continue;
+
+        if (strpos($entry, '.tmp_') === 0) {
+            $mtime = @filemtime($path);
+            if ($mtime !== false && ($now - $mtime) > TMP_ORPHAN_TTL) {
+                @unlink($path);
+            }
+            continue;
+        }
+
+        if (!preg_match('/^[a-f0-9]{32}$/', $entry)) continue;
+
+        $raw = @file_get_contents($path);
+        if ($raw === false) continue;
+
+        $obj = json_decode($raw, true);
+        if (!is_array($obj)) {
+            @unlink($path);
+            continue;
+        }
+
+        if (isset($obj['expires'])) {
+            if ($now > (int)$obj['expires']) {
+                @unlink($path);
+            }
+            continue;
+        }
+
+        if (isset($obj['created'])) {
+            if ($now > ((int)$obj['created'] + LEGACY_TTL_SEC)) {
+                @unlink($path);
+            }
+        }
+    }
+    closedir($dh);
+}
+
+/**
+ * Restituisce true se il payload (decoded JSON) e' scaduto.
+ * Supporta sia il nuovo formato (expires) sia il vecchio (created).
+ */
+function snm_is_expired(array $obj): bool {
+    $now = time();
+    if (isset($obj['expires'])) {
+        return $now > (int)$obj['expires'];
+    }
+    if (isset($obj['created'])) {
+        return $now > ((int)$obj['created'] + LEGACY_TTL_SEC);
+    }
+    return true; // payload sospetto senza nessun timestamp: trattalo come scaduto
+}
+
+// Cleanup probabilistico (50%)
+if (random_int(1, 100) <= CLEANUP_PROB_PCT) {
+    snm_cleanup_expired($storage);
+}
 
 // --- Validazione token (anche prevenzione path traversal) ---
 if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
@@ -44,17 +125,8 @@ if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
 
 $filePath = "{$storage}/{$token}";
 
-// --- Cleanup opportunistico: se il file esiste ed e' scaduto, distruggi ---
-if (file_exists($filePath)) {
-    $mtime = @filemtime($filePath);
-    if ($mtime !== false && (time() - $mtime) > SECRET_TTL) {
-        @unlink($filePath);
-    }
-}
-
 /**
- * Output del form HTML per inserire la password.
- * Includiamo un campo hidden "key" che verra' popolato lato client dal fragment URL.
+ * Rende il form di sblocco con campo nascosto per la chiave (popolato lato JS).
  */
 function render_form(string $token, string $errMsg = ''): void {
     $tokenEsc = htmlspecialchars($token, ENT_QUOTES, 'UTF-8');
@@ -107,26 +179,30 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// --- POST: tenta lo sblocco ---
+// --- POST: tentativo di sblocco ---
 
-// La chiave AES arriva via POST (riempita lato JS dal fragment)
 $aesKey    = $_POST['key']       ?? '';
 $inputPass = $_POST['view_pass'] ?? '';
 
 // Validazione chiave AES (256 bit hex)
 if (!ctype_xdigit($aesKey) || strlen($aesKey) !== 64) {
+    // Per uniformare il timing: facciamo comunque un dummy verify prima di rispondere
+    password_verify($inputPass, DUMMY_HASH);
     http_response_code(400);
     die('Chiave non valida o mancante.');
 }
 
 if (!file_exists($filePath)) {
+    // Token inesistente: dummy verify per consumare lo stesso tempo
+    // di un password_verify reale (mitigazione M5 - token enumeration via timing)
+    password_verify($inputPass, DUMMY_HASH);
     $error = 'Link non valido o gia\' usato.';
 } else {
 
-    // Lock esclusivo: blocca race condition su lettura/scrittura/incremento tentativi
     $fp = fopen($filePath, 'r+');
     if (!$fp || !flock($fp, LOCK_EX)) {
         if ($fp) fclose($fp);
+        password_verify($inputPass, DUMMY_HASH); // uniformita' timing
         http_response_code(409);
         die('Richiesta in corso, riprova.');
     }
@@ -135,109 +211,103 @@ if (!file_exists($filePath)) {
     $obj = json_decode($raw, true);
 
     if (!is_array($obj) || !isset($obj['iv'], $obj['tag'], $obj['ct'], $obj['hash'])) {
-        // Payload corrotto: distruggi e fail
+        // Payload corrotto: distruggi, dummy verify per timing
         ftruncate($fp, 0);
         flock($fp, LOCK_UN);
         fclose($fp);
         @unlink($filePath);
+        password_verify($inputPass, DUMMY_HASH);
+        $error = 'Link non valido o gia\' usato.';
+    } elseif (snm_is_expired($obj)) {
+        // Scaduto: distruggi, dummy verify per timing
+        ftruncate($fp, 0);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        @unlink($filePath);
+        password_verify($inputPass, DUMMY_HASH);
         $error = 'Link non valido o gia\' usato.';
     } else {
 
-        // Controllo scadenza dentro al lock
-        $created = (int)($obj['created'] ?? 0);
-        if ($created > 0 && (time() - $created) > SECRET_TTL) {
+        $attempts = (int)($obj['attempts'] ?? 0);
+
+        if ($attempts >= MAX_ATTEMPTS) {
             ftruncate($fp, 0);
             flock($fp, LOCK_UN);
             fclose($fp);
             @unlink($filePath);
-            $error = 'Link non valido o gia\' usato.';
-        } else {
+            password_verify($inputPass, DUMMY_HASH);
+            http_response_code(429);
+            die('Troppi tentativi falliti. Il segreto e\' stato distrutto.');
+        }
 
-            $attempts = (int)($obj['attempts'] ?? 0);
+        // Verifica password (qui usiamo il vero hash)
+        if (!password_verify($inputPass, $obj['hash'])) {
+            // Password sbagliata: incrementa counter e riscrivi
+            $obj['attempts'] = $attempts + 1;
+            $newPayload = json_encode($obj);
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, $newPayload);
+            fflush($fp);
+            flock($fp, LOCK_UN);
+            fclose($fp);
 
-            // Tentativi gia' esauriti: distruggi e blocca
-            if ($attempts >= MAX_ATTEMPTS) {
-                ftruncate($fp, 0);
-                flock($fp, LOCK_UN);
-                fclose($fp);
+            if ($obj['attempts'] >= MAX_ATTEMPTS) {
                 @unlink($filePath);
                 http_response_code(429);
                 die('Troppi tentativi falliti. Il segreto e\' stato distrutto.');
             }
+            $error = 'Password errata.';
+        } else {
+            // Password corretta: decifra con AES-GCM (verifica tag inclusa)
+            $iv  = base64_decode($obj['iv'],  true);
+            $tag = base64_decode($obj['tag'], true);
+            $ct  = base64_decode($obj['ct'],  true);
 
-            // Verifica password (timing-safe, slow hash)
-            if (!password_verify($inputPass, $obj['hash'])) {
-                // Password errata: incrementa attempts e riscrivi il file
-                $obj['attempts'] = $attempts + 1;
-                $newPayload = json_encode($obj);
+            if ($iv === false || $tag === false || $ct === false) {
                 ftruncate($fp, 0);
-                rewind($fp);
-                fwrite($fp, $newPayload);
-                fflush($fp);
                 flock($fp, LOCK_UN);
                 fclose($fp);
-
-                // Se l'incremento ha raggiunto il limite, distruggi subito
-                if ($obj['attempts'] >= MAX_ATTEMPTS) {
-                    @unlink($filePath);
-                    http_response_code(429);
-                    die('Troppi tentativi falliti. Il segreto e\' stato distrutto.');
-                }
-
-                $error = 'Password errata.';
+                @unlink($filePath);
+                $error = 'Link non valido o gia\' usato.';
             } else {
-                // Password corretta: prova a decifrare con AES-GCM (verifica tag inclusa)
-                $iv  = base64_decode($obj['iv'],  true);
-                $tag = base64_decode($obj['tag'], true);
-                $ct  = base64_decode($obj['ct'],  true);
+                $cipher = 'aes-256-gcm';
+                $plain  = openssl_decrypt(
+                    $ct,
+                    $cipher,
+                    hex2bin($aesKey),
+                    OPENSSL_RAW_DATA,
+                    $iv,
+                    $tag
+                );
 
-                if ($iv === false || $tag === false || $ct === false) {
+                if ($plain === false) {
+                    // Tag GCM non verificato: chiave sbagliata o dati alterati
                     ftruncate($fp, 0);
                     flock($fp, LOCK_UN);
                     fclose($fp);
                     @unlink($filePath);
                     $error = 'Link non valido o gia\' usato.';
                 } else {
-                    $cipher = 'aes-256-gcm';
-                    $plain  = openssl_decrypt(
-                        $ct,
-                        $cipher,
-                        hex2bin($aesKey),
-                        OPENSSL_RAW_DATA,
-                        $iv,
-                        $tag
-                    );
-
-                    if ($plain === false) {
-                        // Tag GCM non valido -> chiave sbagliata o dati alterati.
-                        // Trattiamo come "link non valido" per non distinguere dai casi precedenti.
+                    // OK: sovrascrivi a zeri (best effort) e cancella
+                    $size = strlen($raw);
+                    if ($size > 0) {
                         ftruncate($fp, 0);
-                        flock($fp, LOCK_UN);
-                        fclose($fp);
-                        @unlink($filePath);
-                        $error = 'Link non valido o gia\' usato.';
-                    } else {
-                        // OK: sovrascrivi a zeri (best effort, vedi nota sicurezza nel README)
-                        // e cancella il file.
-                        $size = strlen($raw);
-                        if ($size > 0) {
-                            ftruncate($fp, 0);
-                            rewind($fp);
-                            $chunk = str_repeat("\0", min(1048576, $size));
-                            $written = 0;
-                            while ($written < $size) {
-                                $toWrite = min(1048576, $size - $written);
-                                fwrite($fp, substr($chunk, 0, $toWrite));
-                                $written += $toWrite;
-                            }
-                            fflush($fp);
+                        rewind($fp);
+                        $chunk = str_repeat("\0", min(1048576, $size));
+                        $written = 0;
+                        while ($written < $size) {
+                            $toWrite = min(1048576, $size - $written);
+                            fwrite($fp, substr($chunk, 0, $toWrite));
+                            $written += $toWrite;
                         }
-                        flock($fp, LOCK_UN);
-                        fclose($fp);
-                        @unlink($filePath);
-
-                        $decrypted = $plain;
+                        fflush($fp);
                     }
+                    flock($fp, LOCK_UN);
+                    fclose($fp);
+                    @unlink($filePath);
+
+                    $decrypted = $plain;
                 }
             }
         }
@@ -256,7 +326,7 @@ if (!file_exists($filePath)) {
   <div class="container">
     <?php if ($error !== ''): ?>
       <h1>Errore</h1>
-      <p><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
+      <p class="error-text"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
       <?php if ($error === 'Password errata.'): ?>
         <noscript>
           <p class="error-text">Questo servizio richiede JavaScript abilitato.</p>

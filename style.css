@@ -182,6 +182,14 @@ footer a:hover {
     border-radius: 4px;
 }
 
+/* Label per i campi (es. selettore scadenza) */
+.field-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
 /* Messaggi di errore */
 .error-text {
     color: #ff6b6b;
