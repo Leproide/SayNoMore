@@ -10,9 +10,9 @@ SayNoMore è un semplice servizio One Time Secret per condividere password o inf
 - 🔒 Cifratura AES-256-GCM con tag di autenticazione (rileva manomissioni del ciphertext)
 - 🧠 Zero knowledge reale: la chiave di decrittazione viaggia nel fragment URL (`#`) e non viene mai inviata al server tramite il link
 - ⏳ Scadenza configurabile dall'utente: da 1 a 30 giorni (default 7)
-- 🧹 Pulizia automatica: i segreti scaduti vengono rimossi in background, niente accumulo
+- 🧹 Pulizia automatica con lock non-bloccante: i segreti scaduti vengono rimossi in background senza interferire con tentativi di sblocco in corso
 - 🧼 Distruzione dopo lettura (con sovrascrittura best effort, vedi note sotto)
-- 🛡 Mitigazioni anti-abuso: limite 64 KB per segreto, max 5 tentativi password, timing uniforme contro l'enumerazione dei token
+- 🛡 Mitigazioni anti-abuso: limite 64 KB per segreto, max 5 tentativi password, timing uniforme contro l'enumerazione dei token, validazione tipo input contro request malformate
 - 💻 Nessun database richiesto, solo file system
 
 ## 🚀 Come funziona
@@ -45,8 +45,12 @@ I principali parametri sono costanti in cima a `index.php` e `view.php`:
 | `MAX_SECRET_BYTES` | index.php | 65536 (64 KB) | Limite di dimensione del segreto |
 | `MAX_ATTEMPTS` | view.php | 5 | Numero massimo di tentativi password prima della distruzione |
 | `CLEANUP_PROB_PCT` | entrambi | 50 | Probabilità (%) di eseguire un cleanup globale a ogni richiesta |
+| `TMP_ORPHAN_TTL` | entrambi | 3600 | File temporanei orfani (scritture fallite) più vecchi di X secondi vengono rimossi |
+| `LEGACY_TTL_SEC` | entrambi | 7 giorni | TTL fallback per i segreti creati con versioni precedenti (campo `created`) |
 
-Il cleanup globale è probabilistico per ammortizzare il costo: a ogni richiesta c'è il 50% di possibilità che il server scansioni `data/` e rimuova tutti i segreti scaduti e i file temporanei orfani più vecchi di 1 ora. Per un servizio poco trafficato come questo, è un buon compromesso. Se il tuo traffico è molto basso e vuoi essere certo che la pulizia avvenga regolarmente, puoi alzare la percentuale o aggiungere un cron job che chiama una pagina del sito ogni X ore.
+Il cleanup globale è probabilistico per ammortizzare il costo: a ogni richiesta c'è il 50% di possibilità che il server scansioni `data/` e rimuova tutti i segreti scaduti e i file temporanei orfani più vecchi di 1 ora. Il cleanup acquisisce un lock esclusivo non-bloccante su ogni file prima di toccarlo, quindi non interferisce mai con tentativi di sblocco o scritture in corso (i file in uso vengono semplicemente saltati e ripresi nelle passate successive).
+
+Per un servizio poco trafficato è un buon compromesso. Se il tuo traffico è molto basso e vuoi essere certo che la pulizia avvenga regolarmente, puoi alzare la percentuale o aggiungere un cron job che chiama una pagina del sito ogni X ore.
 
 ## 🔒 Note di sicurezza importanti
 
@@ -59,6 +63,10 @@ Il cleanup globale è probabilistico per ammortizzare il costo: a ogni richiesta
 **Sovrascrittura "secure delete" è best effort.** Su filesystem journaled (ext4, NTFS, APFS, XFS), su SSD con wear leveling, e su setup con backup/snapshot, la sovrascrittura a zeri non garantisce l'irrecuperabilità dei dati. Per una protezione seria a riposo, usa un filesystem cifrato.
 
 **Timing attack su enumerazione token.** Per evitare che un attaccante possa distinguere "token esistente" da "token inesistente" misurando i tempi di risposta, ogni richiesta POST esegue una verifica password (reale o dummy) per consumare lo stesso tempo in entrambi i casi.
+
+**Validazione tipo input.** Tutti gli input HTTP (sia GET che POST) vengono validati come stringhe prima di essere processati, per evitare TypeError 500 e log sporchi causati da bot che forgiano richieste con parametri di tipo array (`?token[]=...`).
+
+**Race condition cleanup vs sblocco.** Il cleanup globale usa `flock LOCK_EX | LOCK_NB` su ogni file prima di leggerlo. Se il file è in uso (perché un'altra richiesta sta facendo l'update del counter dei tentativi, o sta decifrando il segreto), viene saltato silenziosamente e verrà gestito in una passata successiva. Questo evita che un cleanup eseguito durante un legittimo tentativo di sblocco possa distruggere il segreto prima del tempo.
 
 ## 🔗 Demo
 

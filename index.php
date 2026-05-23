@@ -6,13 +6,13 @@
  * Distributed under GNU GPL v2.
  * No warranty provided.
  *
- * Patch notes v3:
- *  - TTL configurabile dall'utente (1-30 giorni, default 7), validato server-side
- *  - Limite dimensione secret (default 64 KB)
- *  - Cleanup globale probabilistico (50% delle richieste): scansiona data/
- *    e cancella tutti i segreti scaduti, oltre ai file .tmp_ orfani > 1h
- *  - Payload: il campo "created" e' stato sostituito da "expires" (timestamp assoluto)
- *  - umask 0077 prima della scrittura, niente finestra di permessi laschi
+ * Patch notes v4:
+ *  - Cleanup globale ora usa flock LOCK_EX | LOCK_NB su ogni file prima di
+ *    leggerlo: se il file e' in uso da un'altra richiesta (update attempts,
+ *    decifratura in corso) viene saltato, niente race condition possibile
+ *  - Validazione del tipo input ($_POST) come stringa, evita TypeError 500
+ *    e log sporchi causati da array forgiati
+ *  - Generazione random_int / random_bytes wrappata in try/catch
  */
 
 // --- Security headers ---
@@ -31,6 +31,7 @@ const MAX_TTL_DAYS      = 30;
 const MAX_SECRET_BYTES  = 64 * 1024;        // 64 KB
 const CLEANUP_PROB_PCT  = 50;               // 50% di probabilita' di scan completo
 const TMP_ORPHAN_TTL    = 3600;             // file .tmp_ piu' vecchi di 1h vengono rimossi
+const LEGACY_TTL_SEC    = 7 * 24 * 60 * 60; // fallback per payload vecchi senza "expires"
 
 $storage = __DIR__ . STORAGE_SUBDIR;
 
@@ -43,7 +44,13 @@ if (!file_exists($storage)) {
 /**
  * Cleanup globale: scansiona la cartella data/, elimina i segreti scaduti
  * e i file temporanei orfani. Probabilistico, non bloccante.
- * Backward compatible col vecchio formato che usava "created" + SECRET_TTL.
+ *
+ * NB: per ogni file acquisisce flock LOCK_EX | LOCK_NB. Se il lock non e'
+ * disponibile (file in uso da un'altra richiesta) il file viene saltato.
+ * Questo previene la race condition con update di attempts/decifratura in
+ * corso, che potrebbero trovare il file appena truncato durante un rewrite.
+ *
+ * Backward compatible col vecchio formato che usava "created" + LEGACY_TTL_SEC.
  */
 function snm_cleanup_expired(string $storage): void {
     if (!is_dir($storage)) return;
@@ -51,8 +58,6 @@ function snm_cleanup_expired(string $storage): void {
     if (!$dh) return;
 
     $now = time();
-    // Fallback per vecchi payload privi del campo "expires" (compat con versione precedente)
-    $legacyTtl = 7 * 24 * 60 * 60;
 
     while (($entry = readdir($dh)) !== false) {
         if ($entry === '.' || $entry === '..') continue;
@@ -61,58 +66,88 @@ function snm_cleanup_expired(string $storage): void {
 
         // File temporanei orfani (scritture fallite)
         if (strpos($entry, '.tmp_') === 0) {
+            $fp = @fopen($path, 'r+');
+            if (!$fp) continue;
+            if (!@flock($fp, LOCK_EX | LOCK_NB)) {
+                fclose($fp);
+                continue; // qualcuno lo sta scrivendo
+            }
             $mtime = @filemtime($path);
             if ($mtime !== false && ($now - $mtime) > TMP_ORPHAN_TTL) {
                 @unlink($path);
             }
+            @flock($fp, LOCK_UN);
+            fclose($fp);
             continue;
         }
 
         // Segreti: nome valido = 32 hex chars
         if (!preg_match('/^[a-f0-9]{32}$/', $entry)) continue;
 
-        $raw = @file_get_contents($path);
-        if ($raw === false) continue;
+        $fp = @fopen($path, 'r+');
+        if (!$fp) continue;
+        if (!@flock($fp, LOCK_EX | LOCK_NB)) {
+            fclose($fp);
+            continue; // file in uso, lo gestira' la prossima passata
+        }
+
+        $raw = stream_get_contents($fp);
+        if ($raw === false) {
+            @flock($fp, LOCK_UN);
+            fclose($fp);
+            continue;
+        }
 
         $obj = json_decode($raw, true);
+        $shouldDelete = false;
+
         if (!is_array($obj)) {
-            // Payload corrotto: rimuovi
-            @unlink($path);
-            continue;
+            // Payload corrotto: rimuovi (abbiamo gia' il lock, e' stabile)
+            $shouldDelete = true;
+        } elseif (isset($obj['expires'])) {
+            // Nuovo formato
+            if ($now > (int)$obj['expires']) $shouldDelete = true;
+        } elseif (isset($obj['created'])) {
+            // Vecchio formato (compat con segreti pre-v3)
+            if ($now > ((int)$obj['created'] + LEGACY_TTL_SEC)) $shouldDelete = true;
         }
 
-        // Nuovo formato: campo "expires" (timestamp assoluto)
-        if (isset($obj['expires'])) {
-            if ($now > (int)$obj['expires']) {
-                @unlink($path);
-            }
-            continue;
-        }
+        @flock($fp, LOCK_UN);
+        fclose($fp);
 
-        // Vecchio formato: "created" + TTL fisso a 7 giorni
-        if (isset($obj['created'])) {
-            if ($now > ((int)$obj['created'] + $legacyTtl)) {
-                @unlink($path);
-            }
-        }
+        if ($shouldDelete) @unlink($path);
     }
     closedir($dh);
 }
 
-// Cleanup probabilistico (al 50%)
-if (random_int(1, 100) <= CLEANUP_PROB_PCT) {
+// Cleanup probabilistico (50%) - random_int wrappato per robustezza
+try {
+    $shouldCleanup = (random_int(1, 100) <= CLEANUP_PROB_PCT);
+} catch (\Throwable $e) {
+    // Se la sorgente di entropia fallisce, saltiamo il cleanup (innocuo)
+    $shouldCleanup = false;
+}
+if ($shouldCleanup) {
     snm_cleanup_expired($storage);
 }
 
 $link  = '';
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['secret']) && !empty($_POST['passphrase'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $secretRaw = (string)$_POST['secret'];
+    // --- Validazione tipo input (anti TypeError da array forgiati) ---
+    $secretInput = $_POST['secret']     ?? null;
+    $passInput   = $_POST['passphrase'] ?? null;
 
-    // Limite dimensione (anti-DoS): controllo PRIMA di qualsiasi processing
-    if (strlen($secretRaw) > MAX_SECRET_BYTES) {
+    if (!is_string($secretInput) || !is_string($passInput)) {
+        http_response_code(400);
+        $error = 'Input non valido.';
+    } elseif ($secretInput === '' || $passInput === '') {
+        // Solo se entrambi presenti e non vuoti procediamo
+        $error = '';
+    } elseif (strlen($secretInput) > MAX_SECRET_BYTES) {
+        // Limite dimensione (anti-DoS): controllo PRIMA di qualsiasi processing
         http_response_code(413);
         $error = 'Segreto troppo grande. Massimo ' . (MAX_SECRET_BYTES / 1024) . ' KB.';
     } else {
@@ -129,15 +164,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['secret']) && !empty(
             $days = DEFAULT_TTL_DAYS;
         }
 
-        // Trim solo del secret (la password no, potrebbero esserci spazi voluti)
-        $secret     = trim($secretRaw);
-        $passphrase = $_POST['passphrase'];
+        // Trim solo del secret, non della password (potrebbero esserci spazi voluti)
+        $secret     = trim($secretInput);
+        $passphrase = $passInput;
 
-        // Token: 128 bit hex, nome file
-        $token = bin2hex(random_bytes(16));
-
-        // Chiave AES: 256 bit hex, andra' nel fragment URL
-        $aesKey = bin2hex(random_bytes(32));
+        // Generazione sicura di token, chiave AES e IV.
+        // Se la sorgente di entropia fallisce, fail-fast: non possiamo proseguire
+        // senza randomness sicura.
+        try {
+            $token  = bin2hex(random_bytes(16));        // 128 bit token
+            $aesKey = bin2hex(random_bytes(32));        // 256 bit AES key
+            $cipher = 'aes-256-gcm';
+            $ivLen  = openssl_cipher_iv_length($cipher);
+            $iv     = random_bytes($ivLen);             // 96 bit GCM IV
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            umask($oldUmask);
+            die('Sorgente di entropia non disponibile.');
+        }
 
         // Hash password con Argon2id (slow hash, salt automatico)
         $hashPass = password_hash($passphrase, PASSWORD_ARGON2ID);
@@ -148,11 +192,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['secret']) && !empty(
         }
 
         // Cifratura AES-256-GCM (authenticated encryption)
-        $cipher = 'aes-256-gcm';
-        $ivLen  = openssl_cipher_iv_length($cipher);
-        $iv     = random_bytes($ivLen);
-        $tag    = '';
-        $ct     = openssl_encrypt(
+        $tag = '';
+        $ct  = openssl_encrypt(
             $secret,
             $cipher,
             hex2bin($aesKey),
@@ -162,7 +203,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['secret']) && !empty(
             '',
             16
         );
-
         if ($ct === false) {
             http_response_code(500);
             umask($oldUmask);

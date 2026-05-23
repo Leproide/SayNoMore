@@ -6,14 +6,11 @@
  * Distributed under GNU GPL v2.
  * No warranty provided.
  *
- * Patch notes v3:
- *  - Cleanup globale probabilistico (50%) anche su questa pagina
- *  - Scadenza basata su "expires" (timestamp assoluto) salvato nel payload,
- *    non piu' su filemtime, quindi i tentativi falliti non rinnovano la vita
- *  - Dummy password_verify nei path di errore precoce, per uniformare
- *    il tempo di risposta tra "token inesistente" e "password sbagliata"
- *    (mitigazione di token enumeration via timing attack)
- *  - Compatibilita' con vecchi payload (campo "created" legacy)
+ * Patch notes v4:
+ *  - Cleanup globale ora usa flock LOCK_EX | LOCK_NB su ogni file prima di
+ *    leggerlo, salta i file in uso. Previene race con update di attempts.
+ *  - Validazione del tipo input ($_GET / $_POST) come stringa
+ *  - random_int wrappato in try/catch
  */
 
 // --- Security headers ---
@@ -43,13 +40,18 @@ const LEGACY_TTL_SEC    = 7 * 24 * 60 * 60; // per payload vecchi senza "expires
 const DUMMY_HASH = '$argon2id$v=19$m=65536,t=4,p=1$cTlTSUtPTW96N0RxWEVBNQ$u1JqJ9F/mRRhHp0mmX9HsCM5b0qz+gy2YaUu8JbzPpk';
 
 $storage = __DIR__ . STORAGE_SUBDIR;
-$token   = $_GET['token'] ?? '';
+
+// --- Validazione tipo del token ($_GET['token'] potrebbe essere array) ---
+$tokenInput = $_GET['token'] ?? '';
+$token = is_string($tokenInput) ? $tokenInput : '';
 
 $decrypted = null;
 $error     = '';
 
 /**
- * Cleanup globale (stesso codice di index.php, duplicato per evitare un require).
+ * Cleanup globale. Per ogni file acquisisce flock LOCK_EX | LOCK_NB:
+ * se il lock non e' disponibile (file in uso) lo salta.
+ * Questo evita di leggere un file durante una sua riscrittura legittima.
  */
 function snm_cleanup_expired(string $storage): void {
     if (!is_dir($storage)) return;
@@ -62,44 +64,61 @@ function snm_cleanup_expired(string $storage): void {
         $path = $storage . '/' . $entry;
         if (!is_file($path)) continue;
 
+        // File .tmp_ orfani
         if (strpos($entry, '.tmp_') === 0) {
+            $fp = @fopen($path, 'r+');
+            if (!$fp) continue;
+            if (!@flock($fp, LOCK_EX | LOCK_NB)) {
+                fclose($fp);
+                continue;
+            }
             $mtime = @filemtime($path);
             if ($mtime !== false && ($now - $mtime) > TMP_ORPHAN_TTL) {
                 @unlink($path);
             }
+            @flock($fp, LOCK_UN);
+            fclose($fp);
             continue;
         }
 
+        // Segreti
         if (!preg_match('/^[a-f0-9]{32}$/', $entry)) continue;
 
-        $raw = @file_get_contents($path);
-        if ($raw === false) continue;
+        $fp = @fopen($path, 'r+');
+        if (!$fp) continue;
+        if (!@flock($fp, LOCK_EX | LOCK_NB)) {
+            fclose($fp);
+            continue; // file in uso, lo prendera' la prossima passata
+        }
+
+        $raw = stream_get_contents($fp);
+        if ($raw === false) {
+            @flock($fp, LOCK_UN);
+            fclose($fp);
+            continue;
+        }
 
         $obj = json_decode($raw, true);
+        $shouldDelete = false;
+
         if (!is_array($obj)) {
-            @unlink($path);
-            continue;
+            $shouldDelete = true;
+        } elseif (isset($obj['expires'])) {
+            if ($now > (int)$obj['expires']) $shouldDelete = true;
+        } elseif (isset($obj['created'])) {
+            if ($now > ((int)$obj['created'] + LEGACY_TTL_SEC)) $shouldDelete = true;
         }
 
-        if (isset($obj['expires'])) {
-            if ($now > (int)$obj['expires']) {
-                @unlink($path);
-            }
-            continue;
-        }
+        @flock($fp, LOCK_UN);
+        fclose($fp);
 
-        if (isset($obj['created'])) {
-            if ($now > ((int)$obj['created'] + LEGACY_TTL_SEC)) {
-                @unlink($path);
-            }
-        }
+        if ($shouldDelete) @unlink($path);
     }
     closedir($dh);
 }
 
 /**
- * Restituisce true se il payload (decoded JSON) e' scaduto.
- * Supporta sia il nuovo formato (expires) sia il vecchio (created).
+ * Ritorna true se il payload e' scaduto. Supporta nuovo e vecchio formato.
  */
 function snm_is_expired(array $obj): bool {
     $now = time();
@@ -112,8 +131,13 @@ function snm_is_expired(array $obj): bool {
     return true; // payload sospetto senza nessun timestamp: trattalo come scaduto
 }
 
-// Cleanup probabilistico (50%)
-if (random_int(1, 100) <= CLEANUP_PROB_PCT) {
+// Cleanup probabilistico (50%) - random_int wrappato per robustezza
+try {
+    $shouldCleanup = (random_int(1, 100) <= CLEANUP_PROB_PCT);
+} catch (\Throwable $e) {
+    $shouldCleanup = false;
+}
+if ($shouldCleanup) {
     snm_cleanup_expired($storage);
 }
 
@@ -181,12 +205,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // --- POST: tentativo di sblocco ---
 
-$aesKey    = $_POST['key']       ?? '';
-$inputPass = $_POST['view_pass'] ?? '';
+// Validazione tipo input (anti TypeError da array forgiati)
+$keyInput  = $_POST['key']       ?? '';
+$passInput = $_POST['view_pass'] ?? '';
+
+$aesKey    = is_string($keyInput)  ? $keyInput  : '';
+$inputPass = is_string($passInput) ? $passInput : '';
 
 // Validazione chiave AES (256 bit hex)
 if (!ctype_xdigit($aesKey) || strlen($aesKey) !== 64) {
-    // Per uniformare il timing: facciamo comunque un dummy verify prima di rispondere
+    // Dummy verify per uniformare timing
     password_verify($inputPass, DUMMY_HASH);
     http_response_code(400);
     die('Chiave non valida o mancante.');
@@ -194,7 +222,7 @@ if (!ctype_xdigit($aesKey) || strlen($aesKey) !== 64) {
 
 if (!file_exists($filePath)) {
     // Token inesistente: dummy verify per consumare lo stesso tempo
-    // di un password_verify reale (mitigazione M5 - token enumeration via timing)
+    // di un password_verify reale (mitigazione token enumeration via timing)
     password_verify($inputPass, DUMMY_HASH);
     $error = 'Link non valido o gia\' usato.';
 } else {
@@ -211,7 +239,6 @@ if (!file_exists($filePath)) {
     $obj = json_decode($raw, true);
 
     if (!is_array($obj) || !isset($obj['iv'], $obj['tag'], $obj['ct'], $obj['hash'])) {
-        // Payload corrotto: distruggi, dummy verify per timing
         ftruncate($fp, 0);
         flock($fp, LOCK_UN);
         fclose($fp);
@@ -219,7 +246,6 @@ if (!file_exists($filePath)) {
         password_verify($inputPass, DUMMY_HASH);
         $error = 'Link non valido o gia\' usato.';
     } elseif (snm_is_expired($obj)) {
-        // Scaduto: distruggi, dummy verify per timing
         ftruncate($fp, 0);
         flock($fp, LOCK_UN);
         fclose($fp);
@@ -242,7 +268,6 @@ if (!file_exists($filePath)) {
 
         // Verifica password (qui usiamo il vero hash)
         if (!password_verify($inputPass, $obj['hash'])) {
-            // Password sbagliata: incrementa counter e riscrivi
             $obj['attempts'] = $attempts + 1;
             $newPayload = json_encode($obj);
             ftruncate($fp, 0);
@@ -282,7 +307,6 @@ if (!file_exists($filePath)) {
                 );
 
                 if ($plain === false) {
-                    // Tag GCM non verificato: chiave sbagliata o dati alterati
                     ftruncate($fp, 0);
                     flock($fp, LOCK_UN);
                     fclose($fp);
