@@ -2,28 +2,43 @@
 
 ![c4b311a6-165e-437a-b2af-3d02f8bf007f](https://github.com/user-attachments/assets/7d2c6928-2344-41e8-ab6a-c9ae7ce6c8a3)
 
-SayNoMore è un semplice servizio One Time Secret per condividere password o informazioni sensibili visualizzabili una sola volta. 
+SayNoMore è un semplice servizio One Time Secret per condividere password o informazioni sensibili visualizzabili una sola volta.
 
 ## 🔐 Caratteristiche
 
-- ✉️ Segreti leggibili solo una volta protetti da password (hash sha-512)
-- 🧼 Distruzione automatica dopo la lettura (con sovrascrittura a zeri)
-- 🔒 Cifratura AES-256-CBC
-- 🧠 Zero knowledge: la chiave di decrittazione non viene mai salvata su server
+- ✉️ Segreti leggibili solo una volta protetti da password (hashing Argon2id)
+- 🧼 Distruzione automatica dopo la lettura (con sovrascrittura best effort, vedi nota sotto)
+- 🔒 Cifratura AES-256-GCM con tag di autenticazione (rileva manomissioni del ciphertext)
+- 🧠 Zero knowledge reale: la chiave di decrittazione viaggia nel fragment URL (`#`) e non viene mai inviata al server tramite il link
+- ⏳ I segreti non letti scadono automaticamente dopo 7 giorni
 - 💻 Nessun database richiesto, solo file system
 
 ## 🚀 Come funziona
 
 1. Inserisci un messaggio e una password nel form
-2. Ottieni un link contenente token + chiave
+2. Ottieni un link nella forma `view.php?token=...#chiave`
 3. Invia il link a chi vuoi
-4. Il segreto si autodistrugge dopo l’apertura o l'inserimento di una password errata per 5 volte.
+4. Il destinatario apre il link, inserisce la password e legge il segreto
+5. Il segreto si autodistrugge dopo l'apertura, dopo 5 tentativi falliti, o dopo 7 giorni di inattività
 
 ## 🛠️ Requisiti
 
-- PHP 7.4+
+- PHP 7.4+ (consigliato 8.x)
 - Estensione OpenSSL abilitata
+- Argon2id disponibile (build PHP con libargon2, di default sulle distro moderne)
 - Server web con permessi di scrittura, lo script creerà la cartella `data`
+- HTTPS configurato a livello webserver (raccomandato, vedi sezione sicurezza)
+- JavaScript abilitato lato client (necessario per leggere la chiave dal fragment)
+
+## 🔒 Note di sicurezza importanti
+
+**Chiave nel fragment URL.** La chiave AES sta dopo il `#`, quindi non finisce nei log Apache/nginx, nei referer header, nei sistemi di link preview di Slack/WhatsApp/Telegram, nei log di proxy/CDN/WAF. Resta solo nella history del browser del destinatario fino allo sblocco, dopodiché viene rimossa automaticamente via `history.replaceState`.
+
+**Proteggi la cartella `data/`.** Per default lo script crea `data/` dentro la document root. È **fortemente consigliato** bloccarne l'accesso via web (es. `.htaccess` con `Deny from all` su Apache, o regola `location` di nega su nginx) oppure spostarla fuori dalla document root modificando `$storage` in `index.php` e `view.php`.
+
+**Forza HTTPS.** Lo script non forza HTTPS perché si presume venga fatto a livello webserver. Senza HTTPS, password e chiavi viaggiano in chiaro.
+
+**Sovrascrittura "secure delete" è best effort.** Su filesystem journaled (ext4, NTFS, APFS, XFS), su SSD con wear leveling, e su setup con backup/snapshot, la sovrascrittura a zeri non garantisce l'irrecuperabilità dei dati. Per una protezione seria a riposo, usa un filesystem cifrato.
 
 ## 🔗 Demo
 
@@ -31,9 +46,9 @@ https://saynomore.muninn.ovh
 
 ## ⚠ Attenzione
 
-Tutto quello che pubblico esiste perchè serviva a me prima di tutto, non sono uno sviluppatore e potrebbero esserci bug anche critici per quanto tutto il codice è stato passato su più LLM (Claude, GPT, DeepSeek) alla ricerca di vulnerabilità e dovrebbe essere pulito.
+Tutto quello che pubblico esiste perché serviva a me prima di tutto, non sono uno sviluppatore e potrebbero esserci bug anche critici per quanto tutto il codice sia stato passato su più LLM (Claude, GPT, DeepSeek) alla ricerca di vulnerabilità e dovrebbe essere pulito.
 
-Utilizzate quanto metto a disposizione senza garanzia alcuna
+Utilizzate quanto metto a disposizione senza garanzia alcuna.
 
 # Screenshot
 
@@ -45,4 +60,3 @@ Copia il link con il pulsante Copy, o a mano se preferisci, invialo al destinata
 
 Una volta aperto e inserita la password lo vedrà in questo modo
 ![immagine](https://github.com/user-attachments/assets/0119ef77-1b1b-45ef-b4b6-591c4b65d502)
-
