@@ -156,6 +156,18 @@ footer a:hover {
     text-decoration: underline;
 }
 
+/* Su schermi bassi/stretti, il footer fixed copre il submit button.
+   Lo rendiamo statico (scrolla con la pagina) e togliamo il padding
+   inferiore del body che serviva a evitare la sovrapposizione. */
+@media (max-height: 700px), (max-width: 500px) {
+    footer {
+        position: static;
+    }
+    body {
+        padding-bottom: 0;
+    }
+}
+
 /* Campo password (sostituisce gli style inline) */
 .pw-input {
     width: 100%;
@@ -169,6 +181,29 @@ footer a:hover {
     margin-bottom: 1.5rem;
     text-align: center;
 }
+
+/* Select dedicato: override del nativo Chrome che taglia il testo.
+   - appearance:none + freccia SVG custom (CSP-safe, niente asset esterni)
+   - height aumentata e line-height esplicito per evitare che le lettere
+     con discendente (y, g, p) vengano tagliate sotto
+   - padding-right/left simmetrico per text-align center senza sovrapposizione */
+select.pw-input {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    height: 3.5rem;
+    line-height: 1.5rem;
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-right: 2.5rem;
+    padding-left: 2.5rem;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%23A5A8C5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='1,1 6,7 11,1'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 0.75rem;
+    cursor: pointer;
+}
+select.pw-input::-ms-expand { display: none; } /* IE/Edge legacy */
 
 /* Box di visualizzazione del segreto */
 .secret-box {

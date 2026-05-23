@@ -2,89 +2,153 @@
 
 ![c4b311a6-165e-437a-b2af-3d02f8bf007f](https://github.com/user-attachments/assets/7d2c6928-2344-41e8-ab6a-c9ae7ce6c8a3)
 
-SayNoMore è un semplice servizio One Time Secret per condividere password o informazioni sensibili visualizzabili una sola volta.
+SayNoMore is a simple One Time Secret service for sharing passwords or sensitive information that can only be viewed once.
 
-## 🔐 Caratteristiche
+## 🔐 Features
 
-- ✉️ Segreti leggibili solo una volta protetti da password (hashing Argon2id, salt automatico)
-- 🔒 Cifratura AES-256-GCM con tag di autenticazione (rileva manomissioni del ciphertext)
-- 🧠 Zero knowledge reale: la chiave di decrittazione viaggia nel fragment URL (`#`) e non viene mai inviata al server tramite il link
-- ⏳ Scadenza configurabile dall'utente: da 1 a 30 giorni (default 7)
-- 🧹 Pulizia automatica con lock non-bloccante: i segreti scaduti vengono rimossi in background senza interferire con tentativi di sblocco in corso
-- 🧼 Distruzione dopo lettura (con sovrascrittura best effort, vedi note sotto)
-- 🛡 Mitigazioni anti-abuso: limite 64 KB per segreto, max 5 tentativi password, timing uniforme contro l'enumerazione dei token, validazione tipo input contro request malformate
-- 💻 Nessun database richiesto, solo file system
+- ✉️ Secrets readable only once, protected by a password (Argon2id hashing with automatic salt)
+- 🔒 AES-256-GCM encryption with authentication tag (detects ciphertext tampering)
+- 🧠 Real zero-knowledge: the decryption key travels in the URL fragment (`#`) and is never sent to the server through the link
+- ⏳ User-configurable expiration: from 1 to 30 days (default 7)
+- 🧹 Automatic cleanup with non-blocking locking: expired secrets are removed in the background without interfering with active unlock attempts
+- 🧼 Destruction after read (with best-effort overwrite, see notes below)
+- 🛡 Anti-abuse mitigations: 64 KB secret size limit, max 5 password attempts, uniform timing against token enumeration, input type validation against malformed requests
+- 🌍 Multilingual: Italian for Italian browsers, English everywhere else (based on `Accept-Language`)
+- 🧅 Tor support: links generated on `.onion` hidden services automatically use `http://` instead of `https://`
+- 💻 No database required, just the file system
 
-## 🚀 Come funziona
+## 🚀 How it works
 
-1. Inserisci un messaggio, una password e scegli per quanti giorni il link deve restare valido
-2. Ottieni un link nella forma `view.php?token=...#chiave`
-3. Invia il link a chi vuoi
-4. Il destinatario apre il link, inserisce la password e legge il segreto
-5. Il segreto si autodistrugge dopo l'apertura, dopo 5 tentativi falliti, o alla scadenza scelta
+1. Enter a message, choose a password, and select how many days the link should remain valid
+2. Get a link in the form `view.php?token=...#key`
+3. Send the link to the recipient
+4. The recipient opens the link, enters the password, and reads the secret
+5. The secret self-destructs after opening, after 5 failed attempts, or at the chosen expiration
 
-## 🛠️ Requisiti
+## 🛠️ Requirements
 
-- PHP 7.4+ (consigliato 8.x)
-- Estensione OpenSSL abilitata
-- Argon2id disponibile (build PHP con libargon2, di default sulle distro moderne)
-- Server web con permessi di scrittura, lo script creerà la cartella `data`
-- HTTPS configurato a livello webserver (raccomandato, vedi sezione sicurezza)
-- JavaScript abilitato lato client (necessario per leggere la chiave dal fragment)
-- Filesystem locale (ext4, xfs, btrfs, ntfs). Su NFS/SMB il file locking non è garantito.
+- PHP 7.4+ (8.x recommended)
+- OpenSSL extension enabled
+- Argon2id available (PHP built with libargon2, default on modern distros)
+- Web server with write permissions, the script will create a `data` folder
+- HTTPS configured at the web server level (recommended, see security section)
+- JavaScript enabled on the client (required to read the key from the fragment)
+- Local filesystem (ext4, xfs, btrfs, ntfs). On NFS/SMB file locking is not guaranteed.
 
-## ⚙️ Configurazione
+## ⚙️ Configuration
 
-I principali parametri sono costanti in cima a `index.php` e `view.php`:
+The main parameters are constants at the top of `index.php`, `view.php`, and `cleanup.php`:
 
-| Costante | File | Default | Descrizione |
+| Constant | File | Default | Description |
 |---|---|---|---|
-| `DEFAULT_TTL_DAYS` | index.php | 7 | Giorni di validità di default per i nuovi segreti |
-| `MIN_TTL_DAYS` | index.php | 1 | Minimo TTL selezionabile dall'utente |
-| `MAX_TTL_DAYS` | index.php | 30 | Massimo TTL selezionabile dall'utente |
-| `MAX_SECRET_BYTES` | index.php | 65536 (64 KB) | Limite di dimensione del segreto |
-| `MAX_ATTEMPTS` | view.php | 5 | Numero massimo di tentativi password prima della distruzione |
-| `CLEANUP_PROB_PCT` | entrambi | 50 | Probabilità (%) di eseguire un cleanup globale a ogni richiesta |
-| `TMP_ORPHAN_TTL` | entrambi | 3600 | File temporanei orfani (scritture fallite) più vecchi di X secondi vengono rimossi |
-| `LEGACY_TTL_SEC` | entrambi | 7 giorni | TTL fallback per i segreti creati con versioni precedenti (campo `created`) |
+| `DEFAULT_TTL_DAYS` | index.php | 7 | Default validity in days for new secrets |
+| `MIN_TTL_DAYS` | index.php | 1 | Minimum TTL selectable by the user |
+| `MAX_TTL_DAYS` | index.php | 30 | Maximum TTL selectable by the user |
+| `MAX_SECRET_BYTES` | index.php | 65536 (64 KB) | Secret size limit |
+| `MAX_ATTEMPTS` | view.php | 5 | Maximum number of password attempts before destruction |
+| `CLEANUP_ENABLED` | index.php / view.php | true | Master switch for in-request cleanup. Set to `false` to disable it entirely (useful when you run `cleanup.php` via cron) |
+| `CLEANUP_PROB_PCT` | index.php / view.php | 50 | Probability (%) of running a global cleanup on each request (ignored when `CLEANUP_ENABLED` is `false`) |
+| `TMP_ORPHAN_TTL` | all | 3600 | Orphan temporary files (failed writes) older than X seconds are removed |
+| `LEGACY_TTL_SEC` | all | 7 days | Fallback TTL for secrets created with previous versions (`created` field) |
 
-Il cleanup globale è probabilistico per ammortizzare il costo: a ogni richiesta c'è il 50% di possibilità che il server scansioni `data/` e rimuova tutti i segreti scaduti e i file temporanei orfani più vecchi di 1 ora. Il cleanup acquisisce un lock esclusivo non-bloccante su ogni file prima di toccarlo, quindi non interferisce mai con tentativi di sblocco o scritture in corso (i file in uso vengono semplicemente saltati e ripresi nelle passate successive).
+## 🌍 Internationalization
 
-Per un servizio poco trafficato è un buon compromesso. Se il tuo traffico è molto basso e vuoi essere certo che la pulizia avvenga regolarmente, puoi alzare la percentuale o aggiungere un cron job che chiama una pagina del sito ogni X ore.
+The interface language is automatically selected based on the browser's `Accept-Language` header:
 
-## 🔒 Note di sicurezza importanti
+- Italian browsers (`it`, `it-IT`, ...) → Italian interface
+- All other languages → English interface (default fallback)
 
-**Chiave nel fragment URL.** La chiave AES sta dopo il `#`, quindi non finisce nei log Apache/nginx, nei referer header, nei sistemi di link preview di Slack/WhatsApp/Telegram, nei log di proxy/CDN/WAF. Resta solo nella history del browser del destinatario fino allo sblocco, dopodiché viene rimossa automaticamente via `history.replaceState`.
+All UI strings live in `lang.php`, which contains a translation table for both languages. To add a new language: add a new entry to the array returned by `snm_translations()` and update the language detection in `snm_lang()`.
 
-**Proteggi la cartella `data/`.** Lo script crea `data/` dentro la document root. È **fortemente consigliato** bloccarne l'accesso via web (`.htaccess` con `Deny from all` su Apache, o regola `location` di nega su nginx), oppure spostarla fuori dalla document root modificando `$storage` in `index.php` e `view.php`.
+CLI output (`cleanup.php`) is always in English, since the script is intended for system administrators.
 
-**Forza HTTPS.** Lo script non forza HTTPS perché si presume venga fatto a livello webserver. Senza HTTPS, password e chiavi viaggiano in chiaro.
+## 🧹 Expired secret cleanup
 
-**Sovrascrittura "secure delete" è best effort.** Su filesystem journaled (ext4, NTFS, APFS, XFS), su SSD con wear leveling, e su setup con backup/snapshot, la sovrascrittura a zeri non garantisce l'irrecuperabilità dei dati. Per una protezione seria a riposo, usa un filesystem cifrato.
+Two complementary mechanisms are available; you can use one or both together.
 
-**Timing attack su enumerazione token.** Per evitare che un attaccante possa distinguere "token esistente" da "token inesistente" misurando i tempi di risposta, ogni richiesta POST esegue una verifica password (reale o dummy) per consumare lo stesso tempo in entrambi i casi.
+### 1. Probabilistic in-request cleanup (enabled by default)
 
-**Validazione tipo input.** Tutti gli input HTTP (sia GET che POST) vengono validati come stringhe prima di essere processati, per evitare TypeError 500 e log sporchi causati da bot che forgiano richieste con parametri di tipo array (`?token[]=...`).
+On every request to `index.php` or `view.php` there's a 50% chance that the server scans `data/` and removes expired secrets and orphan temporary files older than 1 hour.
 
-**Race condition cleanup vs sblocco.** Il cleanup globale usa `flock LOCK_EX | LOCK_NB` su ogni file prima di leggerlo. Se il file è in uso (perché un'altra richiesta sta facendo l'update del counter dei tentativi, o sta decifrando il segreto), viene saltato silenziosamente e verrà gestito in una passata successiva. Questo evita che un cleanup eseguito durante un legittimo tentativo di sblocco possa distruggere il segreto prima del tempo.
+Pros: zero configuration, works out of the box.
+Cons: if traffic is very low, expired files may stay on disk longer than expected before enough traffic triggers cleanup.
+
+### 2. Cron-based cleanup (optional, recommended for low-traffic services)
+
+The `cleanup.php` script is a standalone CLI job that guarantees cleanup. It is safe to run in parallel with web requests thanks to non-blocking locking (in-use files are skipped).
+
+**Manual test:**
+```bash
+php /var/www/saynomore/cleanup.php
+```
+
+Example output:
+```
+[2025-01-20 03:15:02] SayNoMore cleanup:
+  scanned:        42
+  expired:        7
+  corrupted:      0
+  tmp orphans:    1
+  locked skipped: 0
+  errors:         0
+```
+
+**Crontab (every hour at :15):**
+```cron
+15 * * * * /usr/bin/php /var/www/saynomore/cleanup.php >/dev/null 2>&1
+```
+
+**Crontab (once a day at 3:15, fine for personal use):**
+```cron
+15 3 * * * /usr/bin/php /var/www/saynomore/cleanup.php >/dev/null 2>&1
+```
+
+**If you want to keep a cleanup log:**
+```cron
+15 3 * * * /usr/bin/php /var/www/saynomore/cleanup.php >> /var/log/saynomore-cleanup.log 2>&1
+```
+
+The script refuses to run if invoked over the web (it checks `PHP_SAPI`), so even if the file were accidentally reachable from a browser it couldn't be abused.
+
+If you enable the cron, you can disable the in-request probabilistic cleanup by setting `CLEANUP_ENABLED` to `false` in both `index.php` and `view.php`. This avoids the small per-request I/O overhead of the random check and leaves cleanup entirely to the cron job.
+
+```php
+const CLEANUP_ENABLED = false;
+```
+
+## 🔒 Important security notes
+
+**Key in the URL fragment.** The AES key sits after the `#`, so it doesn't end up in Apache/nginx logs, in referer headers, in the link-preview systems of Slack/WhatsApp/Telegram, or in proxy/CDN/WAF logs. It only remains in the recipient's browser history until unlock, after which it is automatically removed via `history.replaceState`.
+
+**Protect the `data/` folder.** The script creates `data/` inside the document root. It is **strongly recommended** to block its web access (`.htaccess` with `Deny from all` on Apache, or a `location` deny rule on nginx), or to move it outside the document root by editing `$storage` in `index.php`, `view.php`, and `cleanup.php`.
+
+**Force HTTPS.** The script does not force HTTPS because that is assumed to be handled by the web server. Without HTTPS, passwords and keys travel in clear text. Exception: `.onion` hidden services over Tor, where the link is generated with `http://` because anonymity and encryption are already provided by the Tor protocol.
+
+**"Secure delete" overwrite is best-effort.** On journaled filesystems (ext4, NTFS, APFS, XFS), on SSDs with wear leveling, and on setups with backups/snapshots, overwriting with zeros does not guarantee data unrecoverability. For serious at-rest protection, use an encrypted filesystem.
+
+**Timing attack against token enumeration.** To prevent an attacker from distinguishing "existing token" from "non-existing token" by measuring response times, every POST request performs a password verification (real or dummy) so the same time is consumed in both cases.
+
+**Input type validation.** All HTTP inputs (both GET and POST) are validated as strings before processing, to avoid TypeError 500 errors and noisy logs caused by bots forging requests with array-typed parameters (`?token[]=...`).
+
+**Cleanup vs. unlock race condition.** Global cleanup (both in-request and via cron) uses `flock LOCK_EX | LOCK_NB` on every file before reading it. If a file is in use (because another request is updating the attempts counter or decrypting the secret), it is silently skipped and will be handled on a later pass. This prevents cleanup running during a legitimate unlock attempt from destroying the secret prematurely.
 
 ## 🔗 Demo
 
 https://saynomore.muninn.ovh
 
-## ⚠ Attenzione
+## ⚠ Warning
 
-Tutto quello che pubblico esiste perché serviva a me prima di tutto, non sono uno sviluppatore e potrebbero esserci bug anche critici per quanto tutto il codice sia stato passato su più LLM (Claude, GPT, DeepSeek) alla ricerca di vulnerabilità e dovrebbe essere pulito.
+Everything I publish exists because it was useful to me first. I'm not a software developer, and there may be even critical bugs even though all the code has been reviewed by multiple LLMs (Claude, GPT, DeepSeek) looking for vulnerabilities and should be clean.
 
-Utilizzate quanto metto a disposizione senza garanzia alcuna.
+Use what I publish at your own risk, no warranty whatsoever.
 
-# Screenshot
+# Screenshots
 
-Scrivi il tuo segreto, scegli una password e genera il link
-![immagine](https://github.com/user-attachments/assets/28155680-04e3-44ac-9b79-4680f1b34dcd)
+Write your secret, choose a password, and generate the link
+![image](https://github.com/user-attachments/assets/b967a27f-b716-4c09-ba2e-b09d71696cd0)
 
-Copia il link con il pulsante Copy, o a mano se preferisci, invialo al destinatario
-![immagine](https://github.com/user-attachments/assets/e3e0670c-333e-400b-a7cb-7faf429c74cb)
+Copy the link using the Copy button, or manually if you prefer, and send it to the recipient
+![image](https://github.com/user-attachments/assets/e3e0670c-333e-400b-a7cb-7faf429c74cb)
 
-Una volta aperto e inserita la password lo vedrà in questo modo
-![immagine](https://github.com/user-attachments/assets/0119ef77-1b1b-45ef-b4b6-591c4b65d502)
+Once opened and the password is entered, the recipient will see it like this
+![image](https://github.com/user-attachments/assets/0119ef77-1b1b-45ef-b4b6-591c4b65d502)
