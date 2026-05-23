@@ -238,8 +238,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Costruzione link (HTTPS effettivo demandato al webserver)
-        $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
-        $host  = $_SERVER['HTTP_HOST'];
+        // $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+
+        // Fix per TOR
+	$isOnion = str_ends_with($_SERVER['HTTP_HOST'] ?? '', '.onion');
+	if ($isOnion) {
+		$proto = 'http';
+	} else {
+		$proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+	}
+
+	$host  = $_SERVER['HTTP_HOST'];
         $path  = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 
         // Chiave nel FRAGMENT: mai inviata al server tramite il link
