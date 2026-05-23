@@ -156,6 +156,40 @@ footer a:hover {
     text-decoration: underline;
 }
 
+/* Campo password (sostituisce gli style inline) */
+.pw-input {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1rem;
+    height: 3rem;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-input);
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+/* Box di visualizzazione del segreto */
+.secret-box {
+    width: 100%;
+    height: 360px;
+    padding: 1rem;
+    font-size: 1rem;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-input);
+    border-radius: 4px;
+}
+
+/* Messaggi di errore */
+.error-text {
+    color: #ff6b6b;
+    text-align: center;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+}
+
 /* Responsive mobile */
 @media (max-width: 400px) {
     .container {
