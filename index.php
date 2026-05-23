@@ -237,19 +237,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             die('Errore interno durante il salvataggio.');
         }
 
-        // Costruzione link (HTTPS effettivo demandato al webserver)
-        // $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+        // Costruzione link (HTTPS effettivo demandato al webserver,
+        // salvo .onion che usa HTTP perche' Tor gestisce gia' anonimato e cifratura)
+        $host     = $_SERVER['HTTP_HOST'] ?? '';
+        $hostOnly = preg_replace('/:\d+$/', '', $host); // strippa porta se presente
+        $isOnion  = substr($hostOnly, -6) === '.onion';
 
-        // Fix per TOR
-	$isOnion = str_ends_with($_SERVER['HTTP_HOST'] ?? '', '.onion');
-	if ($isOnion) {
-		$proto = 'http';
-	} else {
-		$proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
-	}
+        if ($isOnion) {
+            $proto = 'http';
+        } else {
+            $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+        }
 
-	$host  = $_SERVER['HTTP_HOST'];
-        $path  = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
+        $path = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 
         // Chiave nel FRAGMENT: mai inviata al server tramite il link
         $link = "{$proto}://{$host}{$path}/view.php?token={$token}#{$aesKey}";
