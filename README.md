@@ -35,6 +35,7 @@ https://saynomore.muninn.ovh
 - OpenSSL extension enabled
 - Argon2id available (PHP built with libargon2, default on modern distros)
 - Web server with write permissions, the script will create a `data` folder
+- Protect the `data` directory from unauthorized read access (recommended, see the Security section).
 - HTTPS configured at the web server level (recommended, see security section)
 - JavaScript enabled on the client (required to read the key from the fragment)
 - Local filesystem (ext4, xfs, btrfs, ntfs). On NFS/SMB file locking is not guaranteed.
@@ -163,7 +164,7 @@ location ^~ /data/ {
 
 # Secret Expiration Check
 
-The ExpireCheck.sh script allows you to verify the status of your secrets and quickly identify potential issues.
+The `ExpireCheck.sh` script allows you to verify the status of your secrets and quickly identify potential issues.
 
 It provides the following checks:
 
