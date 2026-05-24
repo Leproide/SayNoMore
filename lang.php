@@ -113,6 +113,7 @@ function snm_translations(): array {
             'index.btn.copy'              => 'Copia',
             'index.btn.copy.success'      => 'Copiato!',
             'index.btn.copy.error'        => 'Errore',
+            'index.btn.new'               => 'Crea un altro segreto',
 
             // Form view
             'view.heading.unlock'         => 'Sblocca Segreto',
@@ -121,6 +122,9 @@ function snm_translations(): array {
             'view.btn.unlock'             => 'Sblocca segreto',
             'view.btn.retry'              => 'Riprova',
             'view.btn.home'               => 'Home',
+            'view.btn.copy_secret'        => 'Copia negli appunti',
+            'view.btn.copy_secret.success'=> 'Copiato!',
+            'view.btn.copy_secret.error'  => 'Errore',
             'view.noscript'               => 'Questo servizio richiede JavaScript abilitato per recuperare la chiave dal link.',
             'view.noscript.short'         => 'Questo servizio richiede JavaScript abilitato.',
 
@@ -163,6 +167,7 @@ function snm_translations(): array {
             'index.btn.copy'              => 'Copy',
             'index.btn.copy.success'      => 'Copied!',
             'index.btn.copy.error'        => 'Error',
+            'index.btn.new'               => 'Create another secret',
 
             // View form
             'view.heading.unlock'         => 'Unlock Secret',
@@ -171,6 +176,9 @@ function snm_translations(): array {
             'view.btn.unlock'             => 'Unlock secret',
             'view.btn.retry'              => 'Retry',
             'view.btn.home'               => 'Home',
+            'view.btn.copy_secret'        => 'Copy to clipboard',
+            'view.btn.copy_secret.success'=> 'Copied!',
+            'view.btn.copy_secret.error'  => 'Error',
             'view.noscript'               => 'This service requires JavaScript enabled to retrieve the key from the link.',
             'view.noscript.short'         => 'This service requires JavaScript enabled.',
 

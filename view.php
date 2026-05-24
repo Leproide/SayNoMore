@@ -359,8 +359,16 @@ $isWrongPass = ($error === t('err.wrong_pass'));
     <?php else: ?>
       <h1>SayNoMore</h1><br>
       <h2><?= htmlspecialchars(t('view.heading.secret'), ENT_QUOTES, 'UTF-8') ?></h2><br>
-      <textarea readonly class="secret-box"><?= htmlspecialchars($decrypted, ENT_QUOTES, 'UTF-8') ?></textarea>
+      <textarea readonly class="secret-box" id="secretBox"><?= htmlspecialchars($decrypted, ENT_QUOTES, 'UTF-8') ?></textarea>
       <div class="actions">
+        <button
+          type="button"
+          id="copySecretBtn"
+          class="generate"
+          data-label-default="<?= htmlspecialchars(t('view.btn.copy_secret'),         ENT_QUOTES, 'UTF-8') ?>"
+          data-label-success="<?= htmlspecialchars(t('view.btn.copy_secret.success'), ENT_QUOTES, 'UTF-8') ?>"
+          data-label-error="<?=   htmlspecialchars(t('view.btn.copy_secret.error'),   ENT_QUOTES, 'UTF-8') ?>"
+        ><?= htmlspecialchars(t('view.btn.copy_secret'), ENT_QUOTES, 'UTF-8') ?></button>
         <form action="index.php" method="get"><button type="submit" class="generate"><?= htmlspecialchars(t('view.btn.home'), ENT_QUOTES, 'UTF-8') ?></button></form>
       </div>
     <?php endif; ?>

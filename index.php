@@ -264,6 +264,9 @@ umask($oldUmask);
           data-label-error="<?=   htmlspecialchars(t('index.btn.copy.error'),   ENT_QUOTES, 'UTF-8') ?>"
         ><?= htmlspecialchars(t('index.btn.copy'), ENT_QUOTES, 'UTF-8') ?></button>
       </div>
+      <div class="actions">
+        <form action="index.php" method="get"><button type="submit" class="generate"><?= htmlspecialchars(t('index.btn.new'), ENT_QUOTES, 'UTF-8') ?></button></form>
+      </div>
     <?php else: ?>
       <form method="POST" autocomplete="off">
         <textarea
