@@ -92,6 +92,7 @@ Example output:
   locked skipped: 0
   errors:         0
 ```
+<img width="620" height="181" alt="immagine" src="https://github.com/user-attachments/assets/5b56602d-c767-420d-92c3-fbd9227fe03e" />
 
 **Crontab (every hour at :15):**
 ```cron
