@@ -25,6 +25,10 @@ SayNoMore is a simple One Time Secret service for sharing passwords or sensitive
 4. The recipient opens the link, enters the password, and reads the secret
 5. The secret self-destructs after opening, after 5 failed attempts, or at the chosen expiration
 
+## 🔗 Demo
+
+https://saynomore.muninn.ovh
+
 ## 🛠️ Requirements
 
 - PHP 7.4+ (8.x recommended)
@@ -157,16 +161,6 @@ location ^~ /data/ {
 
 **Cleanup vs. unlock race condition.** Global cleanup (both in-request and via cron) uses `flock LOCK_EX | LOCK_NB` on every file before reading it. If a file is in use (because another request is updating the attempts counter or decrypting the secret), it is silently skipped and will be handled on a later pass. This prevents cleanup running during a legitimate unlock attempt from destroying the secret prematurely.
 
-## 🔗 Demo
-
-https://saynomore.muninn.ovh
-
-## ⚠ Warning
-
-Everything I publish exists because it was useful to me first. I'm not a software developer, and there may be even critical bugs even though all the code has been reviewed by multiple LLMs (Claude, GPT, DeepSeek) looking for vulnerabilities and should be clean.
-
-Use what I publish at your own risk, no warranty whatsoever.
-
 # Secret Expiration Check
 
 The ExpireCheck.sh script allows you to verify the status of your secrets and quickly identify potential issues.
@@ -194,6 +188,12 @@ Once opened and the password is entered, the recipient will see it like this
 ![image](https://github.com/user-attachments/assets/aecc3ef9-1e70-42eb-8f07-bbb1b990caff)
 
 ![image](https://github.com/user-attachments/assets/1f4cb15f-f161-4368-ae13-d8a5ecf6ca52)
+
+## ⚠ Warning
+
+Everything I publish exists because it was useful to me first. I'm not a software developer, and there may be even critical bugs even though all the code has been reviewed by multiple LLMs (Claude, GPT, DeepSeek) looking for vulnerabilities and should be clean.
+
+Use what I publish at your own risk, no warranty whatsoever.
 
 ## Fonts
 
