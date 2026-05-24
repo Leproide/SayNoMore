@@ -122,6 +122,31 @@ const CLEANUP_ENABLED = false;
 
 **Protect the `data/` folder.** The script creates `data/` inside the document root. It is **strongly recommended** to block its web access (`.htaccess` with `Deny from all` on Apache, or a `location` deny rule on nginx), or to move it outside the document root by editing `$storage` in `index.php`, `view.php`, and `cleanup.php`.
 
+### Apache
+
+Create a `.htaccess` file inside `data/`:
+
+```apache
+Require all denied
+```
+
+If you are using an older Apache version:
+
+```apache
+Deny from all
+```
+
+### Nginx
+
+Add a rule to block direct access to `data/`:
+
+```nginx
+location ^~ /data/ {
+    deny all;
+    return 403;
+}
+```
+
 **Force HTTPS.** The script does not force HTTPS because that is assumed to be handled by the web server. Without HTTPS, passwords and keys travel in clear text. Exception: `.onion` hidden services over Tor, where the link is generated with `http://` because anonymity and encryption are already provided by the Tor protocol.
 
 **"Secure delete" overwrite is best-effort.** On journaled filesystems (ext4, NTFS, APFS, XFS), on SSDs with wear leveling, and on setups with backups/snapshots, overwriting with zeros does not guarantee data unrecoverability. For serious at-rest protection, use an encrypted filesystem.
