@@ -1,255 +1,289 @@
-/* style.css – DARK THEME + BACKGROUND + GLASS EFFECT */
+/* SayNoMore - style.css
+ *
+ * Layout: single column, contenuto centrato orizzontalmente.
+ * Niente footer "barra", niente position:fixed.
+ * Il footer e' una semplice riga di testo discreta che chiude la card.
+ */
 
-/* Reset e box-sizing */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
-/* Palette colori */
 :root {
-    --bg-page:      #1B1F3A;
-    --bg-card:      #232743;
-    --bg-input:     #2A2F4A;
-    --border-input: #3B3F5C;
-    --text-primary: #E5E9F0;
+    --bg-input:       #2A2F4A;
+    --border-input:   #3B3F5C;
+    --text-primary:   #E5E9F0;
     --text-secondary: #A5A8C5;
-    --blue-accent:  #4A76D9;
-    --blue-hover:   #3B5FAA;
-    --footer-bg:    #232743;
+    --text-muted:     #6e7396;
+    --blue-accent:    #4A76D9;
+    --blue-hover:     #3B5FAA;
+    --error-color:    #ff6b6b;
 }
 
-/* Pagina e font */
-html, body {
-    height: 100%;
+html {
+    min-height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    min-height: 100dvh; /* dvh = dynamic viewport height, esclude la barra
+                           dell'indirizzo dinamica di Chrome Android e Safari
+                           iOS. Evita scroll bar fantasma. Fallback a vh su
+                           browser piu' vecchi. */
     font-family: Arial, sans-serif;
-    background: 
-        linear-gradient(rgba(27, 31, 58, 0.45), rgba(27, 31, 58, 0.45)), 
+    color: var(--text-primary);
+    background:
+        linear-gradient(rgba(27, 31, 58, 0.55), rgba(27, 31, 58, 0.75)),
         url('background.webp');
     background-size: cover;
     background-position: center;
-    color: var(--text-primary);
-}
+    background-attachment: fixed;
 
-/* Centra la card */
-body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding-bottom: 4rem;
+    padding: 2rem 1rem;
 }
 
-/* Card principale con effetto glass */
+/* ---------- Card ---------- */
 .container {
     width: 100%;
     max-width: 500px;
-    background: rgba(35, 39, 67, 0.4);
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    background: rgba(35, 39, 67, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     padding: 2rem;
-    margin-bottom: 2rem;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+
+    /* margin-block auto + flex column su body centra verticalmente
+       SOLO quando la card e' piu' corta del viewport.
+       Su contenuti piu' alti, il margin auto degenera a 0 e la card
+       parte naturalmente dall'alto (con padding del body). */
+    margin: auto 0;
 }
 
-/* Titolo */
 h1 {
     text-align: center;
-    margin-bottom: 1.5rem;
-    font-size: 1.75rem;
-    color: var(--text-primary);
+    margin-bottom: 1.75rem;
+    font-size: 1.875rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
 }
 
-/* Textarea opaca */
-textarea {
-    width: 100%;
-    height: 360px;
-    padding: 1rem;
-    font-size: 1rem;
-    line-height: 1.4;
-    background: var(--bg-input);
-    color: var(--text-primary);
-    border: 1px solid var(--border-input);
-    border-radius: 4px;
-    resize: vertical;
-    overflow: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    margin-bottom: 1.5rem;
-}
-
-/* Bottoni */
-button {
-    display: inline-block;
-    padding: .75rem 1.5rem;
-    font-size: 1rem;
+h2 {
+    margin-bottom: 0.75rem;
+    font-size: 1.1rem;
     font-weight: 600;
-    text-align: center;
-    background: var(--blue-accent);
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background .15s ease;
-    text-decoration: none;
-}
-button:hover {
-    background: var(--blue-hover);
-}
-
-/* Link Box */
-.link-box {
-    display: flex !important;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    margin-bottom: 1.5rem;
-}
-.link-box input {
-    width: 100%;
-    padding: .75rem;
-    font-size: 1rem;
-    background: var(--bg-input);
-    color: var(--text-primary);
-    border: 1px solid var(--border-input);
-    border-radius: 4px;
-}
-.link-box button {
-    margin-top: 1rem;
-    width: auto;
-}
-
-/* Bottone principale */
-button.generate {
-    width: 100%;
-    margin-top: 1rem;
-}
-
-/* Footer glass */
-footer {
-    width: 100%;
-    padding: 1rem 0;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    text-align: center;
-    background: rgba(35, 39, 67, 0.35);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-footer .footer-content {
-    max-width: 500px;
-    margin: 0 auto;
-    text-align: center;
-    font-size: .9rem;
     color: var(--text-secondary);
 }
-footer a {
-    color: #FFFFFF;
-    text-decoration: none;
-}
-footer a:hover {
-    text-decoration: underline;
-}
 
-/* Su schermi bassi/stretti, il footer fixed copre il submit button.
-   Lo rendiamo statico (scrolla con la pagina) e togliamo il padding
-   inferiore del body che serviva a evitare la sovrapposizione. */
-@media (max-height: 700px), (max-width: 500px) {
-    footer {
-        position: static;
-    }
-    body {
-        padding-bottom: 0;
-    }
-}
-
-/* Campo password (sostituisce gli style inline) */
-.pw-input {
+/* ---------- Form fields ---------- */
+textarea {
     width: 100%;
-    padding: 1rem;
-    font-size: 1rem;
-    height: 3rem;
+    height: 220px;
+    padding: 0.875rem 1rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    font-family: inherit;
     background: var(--bg-input);
     color: var(--text-primary);
     border: 1px solid var(--border-input);
-    border-radius: 4px;
-    margin-bottom: 1.5rem;
-    text-align: center;
+    border-radius: 8px;
+    resize: vertical;
+    margin-bottom: 1rem;
+    transition: border-color 0.15s ease;
+}
+textarea:focus {
+    outline: none;
+    border-color: var(--blue-accent);
 }
 
-/* Select dedicato: override del nativo Chrome che taglia il testo.
-   - appearance:none + freccia SVG custom (CSP-safe, niente asset esterni)
-   - height aumentata e line-height esplicito per evitare che le lettere
-     con discendente (y, g, p) vengano tagliate sotto
-   - padding-right/left simmetrico per text-align center senza sovrapposizione */
+.pw-input {
+    width: 100%;
+    height: 2.875rem;
+    padding: 0 1rem;
+    font-size: 0.95rem;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-input);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    transition: border-color 0.15s ease;
+}
+.pw-input:focus {
+    outline: none;
+    border-color: var(--blue-accent);
+}
+input.pw-input {
+    text-align: left;
+}
+
+/* Select con freccia custom (CSP-safe, no asset esterni) */
 select.pw-input {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
-    height: 3.5rem;
-    line-height: 1.5rem;
-    padding-top: 0;
-    padding-bottom: 0;
-    padding-right: 2.5rem;
-    padding-left: 2.5rem;
+    height: 2.875rem;
+    padding: 0 2.5rem 0 1rem;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%23A5A8C5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='1,1 6,7 11,1'/></svg>");
     background-repeat: no-repeat;
     background-position: right 1rem center;
     background-size: 0.75rem;
     cursor: pointer;
 }
-select.pw-input::-ms-expand { display: none; } /* IE/Edge legacy */
+select.pw-input::-ms-expand { display: none; }
 
-/* Box di visualizzazione del segreto */
-.secret-box {
-    width: 100%;
-    height: 360px;
-    padding: 1rem;
-    font-size: 1rem;
-    background: var(--bg-input);
-    color: var(--text-primary);
-    border: 1px solid var(--border-input);
-    border-radius: 4px;
-}
-
-/* Label per i campi (es. selettore scadenza) */
 .field-label {
     display: block;
     margin-bottom: 0.5rem;
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     color: var(--text-secondary);
 }
 
-/* Messaggi di errore */
-.error-text {
-    color: #ff6b6b;
+.secret-box {
+    width: 100%;
+    min-height: 180px;
+    padding: 1rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-input);
+    border-radius: 8px;
+    resize: vertical;
+}
+
+/* ---------- Buttons ---------- */
+button {
+    display: inline-block;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
     text-align: center;
+    background: var(--blue-accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.05s ease;
+}
+button:hover {
+    background: var(--blue-hover);
+}
+button:active {
+    transform: translateY(1px);
+}
+button.generate {
+    width: 100%;
+    padding: 0.875rem 1.25rem;
+    margin-top: 0.5rem;
+}
+
+/* ---------- Link box ---------- */
+.link-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+    margin-bottom: 1rem;
+}
+.link-box input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-input);
+    border-radius: 8px;
+}
+.link-box button {
+    align-self: stretch;
+}
+
+/* ---------- Misc ---------- */
+.info-text {
+    text-align: center;
+    color: var(--text-secondary);
     margin-bottom: 1rem;
     font-size: 0.95rem;
 }
+.actions {
+    margin-top: 1.25rem;
+}
+.actions button {
+    width: 100%;
+}
 
-/* Responsive mobile */
-@media (max-width: 400px) {
+.error-text {
+    color: var(--error-color);
+    text-align: center;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+/* Override autofill Chrome/Edge */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--bg-input) inset !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    caret-color: var(--text-primary);
+    transition: background-color 9999s ease-out;
+}
+
+/* ---------- Footer ---------- */
+/*
+ * Riga di testo discreta sotto la card. Niente position:fixed, niente
+ * barre full-width, niente blur. Si comporta come una caption della card.
+ * Lo wrapper full-width perche' il body e' display:flex column;
+ * gli diamo flex:none cosi' non si stira oltre il contenuto.
+ */
+footer {
+    width: 100%;
+    max-width: 500px;
+    padding: 1.25rem 1rem 0.5rem;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    flex: none;
+}
+footer a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(165, 168, 197, 0.3);
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+footer a:hover {
+    color: var(--text-primary);
+    border-bottom-color: var(--text-primary);
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 500px) {
+    body {
+        padding: 1rem 0.75rem;
+    }
     .container {
-        padding: 1.5rem 1rem;
+        padding: 1.5rem 1.25rem;
+        border-radius: 10px;
     }
     h1 {
         font-size: 1.5rem;
+        margin-bottom: 1.25rem;
     }
     textarea {
-        height: 280px;
+        height: 180px;
     }
-    .actions {
-        text-align: center;
-        margin-top: 1rem;
-    }
-    .actions button {
-        display: block;
-        margin: 0 auto;
+    footer {
+        padding: 1rem 0.5rem 0.25rem;
+        font-size: 0.75rem;
     }
 }
