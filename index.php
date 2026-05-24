@@ -241,6 +241,8 @@ umask($oldUmask);
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title><?= htmlspecialchars(t('page.title.index'), ENT_QUOTES, 'UTF-8') ?></title>
   <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="favicon.ico">
+  <link rel="shortcut icon" href="favicon.ico">
 </head>
 <body>
   <div class="container">
