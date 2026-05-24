@@ -169,16 +169,16 @@ Use what I publish at your own risk, no warranty whatsoever.
 
 # Screenshots
 
-Write your secret, choose a password, set expiration, and generate the link
-![image](https://github.com/user-attachments/assets/38dba088-418a-4ba9-96b3-50a624b72123)
+Write your secret, choose a password, set expiration, and generate the link  
+![image](https://github.com/user-attachments/assets/20cdc384-1b4f-4b33-96f7-290fbb776199)
 
-Copy the link using the Copy button, or manually if you prefer, and send it to the recipient
-![image](https://github.com/user-attachments/assets/9055147c-6a43-4fe1-a428-aa776b8ce2a2)
+Copy the link using the Copy button, or manually if you prefer, and send it to the recipient  
+![image](https://github.com/user-attachments/assets/221b8a15-4d68-412e-88dd-ab3fed90695a)
 
-Once opened and the password is entered, the recipient will see it like this
-![image](https://github.com/user-attachments/assets/982eb6f0-f641-4838-9a4a-251a6bfd497e)
+Once opened and the password is entered, the recipient will see it like this  
+![image](https://github.com/user-attachments/assets/aecc3ef9-1e70-42eb-8f07-bbb1b990caff)
 
-![image](https://github.com/user-attachments/assets/8f3d4246-c020-4ff6-af58-3c4c6e2daa4a)
+![image](https://github.com/user-attachments/assets/1f4cb15f-f161-4368-ae13-d8a5ecf6ca52)
 
 
 ## Fonts
