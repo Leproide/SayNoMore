@@ -169,11 +169,14 @@ Use what I publish at your own risk, no warranty whatsoever.
 
 # Screenshots
 
-Write your secret, choose a password, and generate the link
-![image](https://github.com/user-attachments/assets/b967a27f-b716-4c09-ba2e-b09d71696cd0)
+Write your secret, choose a password, set expiration, and generate the link
+![image](https://github.com/user-attachments/assets/e0bdb36d-ad93-4228-af2c-e9d20846be11)
 
 Copy the link using the Copy button, or manually if you prefer, and send it to the recipient
-![image](https://github.com/user-attachments/assets/e3e0670c-333e-400b-a7cb-7faf429c74cb)
+![image](https://github.com/user-attachments/assets/c3699f15-c6c9-460f-8005-6e6ce7de9154)
 
 Once opened and the password is entered, the recipient will see it like this
-![image](https://github.com/user-attachments/assets/0119ef77-1b1b-45ef-b4b6-591c4b65d502)
+![image](https://github.com/user-attachments/assets/c5e99602-0f06-48c2-ad81-c754a76ad1ac)
+
+![image](https://github.com/user-attachments/assets/70faecb5-5479-4998-a592-e3cbe39d249b)
+
