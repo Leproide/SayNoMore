@@ -183,12 +183,12 @@ Write your secret, choose a password, set expiration, and generate the link
 ![image](https://github.com/user-attachments/assets/20cdc384-1b4f-4b33-96f7-290fbb776199)
 
 Copy the link using the Copy button, or manually if you prefer, and send it to the recipient  
-![image](https://github.com/user-attachments/assets/221b8a15-4d68-412e-88dd-ab3fed90695a)
+![image](https://github.com/user-attachments/assets/45c0349c-c363-4a43-9ebb-aaccd258b4dc)
 
 Once opened and the password is entered, the recipient will see it like this  
 ![image](https://github.com/user-attachments/assets/aecc3ef9-1e70-42eb-8f07-bbb1b990caff)
 
-![image](https://github.com/user-attachments/assets/1f4cb15f-f161-4368-ae13-d8a5ecf6ca52)
+![image](https://github.com/user-attachments/assets/87ba51f1-c9fb-40f6-bd3d-3953dc6dd197)
 
 ## ⚠ Warning
 
