@@ -167,19 +167,6 @@ Everything I publish exists because it was useful to me first. I'm not a softwar
 
 Use what I publish at your own risk, no warranty whatsoever.
 
-# Screenshots
-
-Write your secret, choose a password, set expiration, and generate the link  
-![image](https://github.com/user-attachments/assets/20cdc384-1b4f-4b33-96f7-290fbb776199)
-
-Copy the link using the Copy button, or manually if you prefer, and send it to the recipient  
-![image](https://github.com/user-attachments/assets/221b8a15-4d68-412e-88dd-ab3fed90695a)
-
-Once opened and the password is entered, the recipient will see it like this  
-![image](https://github.com/user-attachments/assets/aecc3ef9-1e70-42eb-8f07-bbb1b990caff)
-
-![image](https://github.com/user-attachments/assets/1f4cb15f-f161-4368-ae13-d8a5ecf6ca52)
-
 # Secret Expiration Check
 
 The ExpireCheck.sh script allows you to verify the status of your secrets and quickly identify potential issues.
@@ -194,6 +181,19 @@ It provides the following checks:
 This script is useful for monitoring secret lifecycle management and preventing unexpected authentication or service failures caused by expired credentials.
 
 ![image](https://github.com/user-attachments/assets/716c7f59-8b79-49e3-8461-aac097d4042d)
+
+# Screenshots
+
+Write your secret, choose a password, set expiration, and generate the link  
+![image](https://github.com/user-attachments/assets/20cdc384-1b4f-4b33-96f7-290fbb776199)
+
+Copy the link using the Copy button, or manually if you prefer, and send it to the recipient  
+![image](https://github.com/user-attachments/assets/221b8a15-4d68-412e-88dd-ab3fed90695a)
+
+Once opened and the password is entered, the recipient will see it like this  
+![image](https://github.com/user-attachments/assets/aecc3ef9-1e70-42eb-8f07-bbb1b990caff)
+
+![image](https://github.com/user-attachments/assets/1f4cb15f-f161-4368-ae13-d8a5ecf6ca52)
 
 ## Fonts
 
