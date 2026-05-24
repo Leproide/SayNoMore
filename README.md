@@ -180,6 +180,20 @@ Once opened and the password is entered, the recipient will see it like this
 
 ![image](https://github.com/user-attachments/assets/1f4cb15f-f161-4368-ae13-d8a5ecf6ca52)
 
+# Secret Expiration Check
+
+The ExpireCheck.sh script allows you to verify the status of your secrets and quickly identify potential issues.
+
+It provides the following checks:
+
+- Expired secrets
+- Secrets expiring within the next 24 hours
+- Secrets still valid for more than 24 hours
+- Misconfigured or broken secrets without an expiration date
+
+This script is useful for monitoring secret lifecycle management and preventing unexpected authentication or service failures caused by expired credentials.
+
+![image](https://github.com/user-attachments/assets/716c7f59-8b79-49e3-8461-aac097d4042d)
 
 ## Fonts
 
