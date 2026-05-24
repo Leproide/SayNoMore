@@ -181,3 +181,8 @@ Once opened and the password is entered, the recipient will see it like this
 ![image](https://github.com/user-attachments/assets/8f3d4246-c020-4ff6-af58-3c4c6e2daa4a)
 
 
+## Fonts
+
+This project uses **Chakra Petch**.
+Font by cadsondemak, licensed under the **SIL Open Font License 1.1 (OFL-1.1)**.
+https://github.com/cadsondemak/Chakra-Petch
