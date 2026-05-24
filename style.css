@@ -5,6 +5,26 @@
  * Il footer e' una semplice riga di testo discreta che chiude la card.
  */
 
+/* Font display per il titolo: Chakra Petch self-hosted.
+   File originali dal repo ufficiale Cadson Demak (SIL Open Font License 1.1):
+   https://github.com/cadsondemak/Chakra-Petch
+   Mantenere i file in fonts/ permette di NON contattare server esterni
+   (niente Google Fonts), preservando la privacy del visitatore. */
+@font-face {
+    font-family: 'Chakra Petch';
+    src: url('fonts/ChakraPetch-SemiBold.woff2') format('woff2');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Chakra Petch';
+    src: url('fonts/ChakraPetch-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -69,9 +89,16 @@ body {
 h1 {
     text-align: center;
     margin-bottom: 1.75rem;
-    font-size: 1.875rem;
+    font-family: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
+    font-size: 2.25rem;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #ffffff 0%, #a5b8ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
 }
 
 h2 {
@@ -276,7 +303,7 @@ footer a:hover {
         border-radius: 10px;
     }
     h1 {
-        font-size: 1.5rem;
+        font-size: 1.875rem;
         margin-bottom: 1.25rem;
     }
     textarea {

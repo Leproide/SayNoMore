@@ -19,7 +19,7 @@ require_once __DIR__ . '/lang.php';
 header('Referrer-Policy: no-referrer');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
-header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
 header('Permissions-Policy: interest-cohort=()');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Content-Language: ' . snm_lang());
