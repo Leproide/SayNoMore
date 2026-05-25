@@ -134,8 +134,7 @@ if (CLEANUP_ENABLED) {
 
 // Validazione token (anti path traversal)
 if (!preg_match('/^[a-f0-9]{32}$/', $token)) {
-    http_response_code(400);
-    die(t('err.token_invalid'));
+    render_error_page(t('err.token_invalid'), 400);
 }
 
 $filePath = "{$storage}/{$token}";
@@ -188,6 +187,47 @@ function render_form(string $token, string $errMsg = ''): void {
     <?php
 }
 
+/**
+ * Rende una pagina di errore integrata (stessa UI del resto del sito) e
+ * termina lo script. Usata per tutti i casi in cui prima si chiamava
+ * die(testoNudo): token invalido, link rotto, troppi tentativi, busy, ecc.
+ *
+ * @param string $errMsg     Messaggio gia' tradotto da mostrare
+ * @param int    $httpStatus Codice HTTP da impostare prima di renderizzare
+ */
+function render_error_page(string $errMsg, int $httpStatus = 400): void {
+    http_response_code($httpStatus);
+    $errEsc = htmlspecialchars($errMsg, ENT_QUOTES, 'UTF-8');
+    ?>
+    <!DOCTYPE html>
+    <html lang="<?= htmlspecialchars(snm_lang(), ENT_QUOTES, 'UTF-8') ?>">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <title><?= htmlspecialchars(t('page.title.error'), ENT_QUOTES, 'UTF-8') ?></title>
+      <link rel="stylesheet" href="style.css">
+      <link rel="icon" href="favicon.ico">
+      <link rel="shortcut icon" href="favicon.ico">
+    </head>
+    <body>
+      <div class="container">
+        <h1><?= htmlspecialchars(t('err.heading'), ENT_QUOTES, 'UTF-8') ?></h1>
+        <p class="error-text"><?= $errEsc ?></p>
+        <div class="actions">
+          <form action="index.php" method="get"><button type="submit" class="generate"><?= htmlspecialchars(t('view.btn.home'), ENT_QUOTES, 'UTF-8') ?></button></form>
+        </div>
+      </div>
+      <footer>
+        <div class="footer-content">
+          <p><?= t('footer.tagline') ?> &mdash; <a href="https://github.com/leproide" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars(t('footer.github'), ENT_QUOTES, 'UTF-8') ?></a></p>
+        </div>
+      </footer>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
 // --- GET: mostra il form ---
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     render_form($token);
@@ -204,8 +244,7 @@ $inputPass = is_string($passInput) ? $passInput : '';
 
 if (!ctype_xdigit($aesKey) || strlen($aesKey) !== 64) {
     password_verify($inputPass, DUMMY_HASH);
-    http_response_code(400);
-    die(t('err.key_invalid'));
+    render_error_page(t('err.key_invalid'), 400);
 }
 
 if (!file_exists($filePath)) {
@@ -217,8 +256,7 @@ if (!file_exists($filePath)) {
     if (!$fp || !flock($fp, LOCK_EX)) {
         if ($fp) fclose($fp);
         password_verify($inputPass, DUMMY_HASH);
-        http_response_code(409);
-        die(t('err.busy'));
+        render_error_page(t('err.busy'), 409);
     }
 
     $raw = stream_get_contents($fp);
@@ -248,8 +286,7 @@ if (!file_exists($filePath)) {
             fclose($fp);
             @unlink($filePath);
             password_verify($inputPass, DUMMY_HASH);
-            http_response_code(429);
-            die(t('err.too_many'));
+            render_error_page(t('err.too_many'), 429);
         }
 
         if (!password_verify($inputPass, $obj['hash'])) {
@@ -264,8 +301,7 @@ if (!file_exists($filePath)) {
 
             if ($obj['attempts'] >= MAX_ATTEMPTS) {
                 @unlink($filePath);
-                http_response_code(429);
-                die(t('err.too_many'));
+                render_error_page(t('err.too_many'), 429);
             }
             $error = t('err.wrong_pass');
         } else {

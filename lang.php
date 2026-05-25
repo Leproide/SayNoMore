@@ -98,6 +98,7 @@ function snm_translations(): array {
             'page.title.index'    => 'SayNoMore',
             'page.title.view'     => 'SayNoMore - Visualizza',
             'page.title.unlock'   => 'Sblocca Segreto',
+            'page.title.error'    => 'SayNoMore - Errore',
 
             // Form index
             'index.placeholder.secret'    => 'Inserisci il tuo segreto...',
@@ -152,6 +153,7 @@ function snm_translations(): array {
             'page.title.index'    => 'SayNoMore',
             'page.title.view'     => 'SayNoMore - View',
             'page.title.unlock'   => 'Unlock Secret',
+            'page.title.error'    => 'SayNoMore - Error',
 
             // Index form
             'index.placeholder.secret'    => 'Enter your secret...',
