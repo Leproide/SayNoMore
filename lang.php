@@ -139,9 +139,9 @@ function snm_translations(): array {
             'err.save'                    => 'Errore interno durante il salvataggio.',
             'err.token_invalid'           => 'Token non valido.',
             'err.key_invalid'             => 'Chiave non valida o mancante.',
-            'err.link_invalid'            => 'Link non valido o gia\' usato.',
+            'err.link_invalid'            => 'Link non valido o già usato.',
             'err.busy'                    => 'Richiesta in corso, riprova.',
-            'err.too_many'                => 'Troppi tentativi falliti. Il segreto e\' stato distrutto.',
+            'err.too_many'                => 'Troppi tentativi falliti. Il segreto è stato distrutto.',
             'err.wrong_pass'              => 'Password errata.',
 
             // Footer
