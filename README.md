@@ -47,7 +47,7 @@ required crypto primitives. Missing Argon2id or AES-256-GCM would cause
 silent failures: secrets get created but become **impossible to unlock**,
 even with the correct password.
 
-### One-line check
+### One-line CLI check
 
 Run this from the same environment that serves the app:
 
@@ -67,6 +67,26 @@ random_bytes: OK
 If any line says `MISSING`, **do not deploy**: rebuild PHP with the missing
 support, or switch to a modern distro package.
 (`php:8.x`), where all four are present by default.
+
+### Browser-side check (recommended)
+
+The CLI `php` binary may differ from the one serving HTTP requests.
+To test the **exact** PHP that will run SayNoMore, the repo ships a
+ready-made probe file. Rename it to activate it:
+
+```bash
+mv argon-check.php.lock argon-check.php
+```
+
+Open `https://your-domain/argon-check.php` in a browser, read the output,
+then **delete the file immediately**:
+
+```bash
+rm argon-check.php
+```
+
+Leaving it online would expose your PHP version and capabilities — useful
+information for an attacker.
 
 ## ⚙️ Configuration
 
