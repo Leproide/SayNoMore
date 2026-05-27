@@ -277,7 +277,8 @@ This script is useful for monitoring secret lifecycle management and preventing 
 # Screenshots
 
 Write your secret, choose a password, set expiration, and generate the link  
-![image](https://github.com/user-attachments/assets/20cdc384-1b4f-4b33-96f7-290fbb776199)
+![image](https://github.com/user-attachments/assets/7a4608a5-9f7c-4d3d-a8b1-e7e4ac4575a6)
+
 
 Copy the link using the Copy button, or manually if you prefer, and send it to the recipient  
 ![image](https://github.com/user-attachments/assets/45c0349c-c363-4a43-9ebb-aaccd258b4dc)
