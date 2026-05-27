@@ -40,6 +40,34 @@ https://saynomore.muninn.ovh
 - JavaScript enabled on the client (required to read the key from the fragment)
 - Local filesystem (ext4, xfs, btrfs, ntfs). On NFS/SMB file locking is not guaranteed.
 
+## ✅ Verify PHP dependencies
+
+Before deploying, make sure the PHP runtime serving SayNoMore has all the
+required crypto primitives. Missing Argon2id or AES-256-GCM would cause
+silent failures: secrets get created but become **impossible to unlock**,
+even with the correct password.
+
+### One-line check
+
+Run this from the same environment that serves the app:
+
+```bash
+php -r &quot;echo &#39;Argon2id: &#39;, (defined(&#39;PASSWORD_ARGON2ID&#39;) ? &#39;OK&#39; : &#39;MISSING&#39;), PHP_EOL, &#39;OpenSSL: &#39;, (extension_loaded(&#39;openssl&#39;) ? &#39;OK&#39; : &#39;MISSING&#39;), PHP_EOL, &#39;AES-256-GCM: &#39;, (in_array(&#39;aes-256-gcm&#39;, openssl_get_cipher_methods(), true) ? &#39;OK&#39; : &#39;MISSING&#39;), PHP_EOL, &#39;random_bytes: &#39;, (function_exists(&#39;random_bytes&#39;) ? &#39;OK&#39; : &#39;MISSING&#39;), PHP_EOL;&quot;
+```
+
+Expected output:
+
+```
+Argon2id: OK
+OpenSSL: OK
+AES-256-GCM: OK
+random_bytes: OK
+```
+
+If any line says `MISSING`, **do not deploy**: rebuild PHP with the missing
+support, or switch to a modern distro package.
+(`php:8.x`), where all four are present by default.
+
 ## ⚙️ Configuration
 
 The main parameters are constants at the top of `index.php`, `view.php`, and `cleanup.php`:
