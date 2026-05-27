@@ -14,6 +14,7 @@
  */
 
 require_once __DIR__ . '/lang.php';
+require_once __DIR__ . '/mail.php';
 
 // --- Security headers ---
 header('Referrer-Policy: no-referrer');
@@ -157,6 +158,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $secret     = trim($secretInput);
         $passphrase = $passInput;
 
+        // --- Notifiche email opzionali ---
+        // Attive solo se mailconfig.php ha 'enabled' => true. Se la
+        // checkbox e' flaggata l'email viene validata e salvata nel
+        // payload del segreto, per essere riusata da view.php quando il
+        // segreto verra' letto o distrutto dopo troppi tentativi.
+        $notifyEmail = '';
+        if (snm_mail_enabled() && !empty($_POST['notify_enabled'])) {
+            $rawEmail = $_POST['notify_email'] ?? '';
+            if (is_string($rawEmail)) {
+                $rawEmail = trim($rawEmail);
+                if (filter_var($rawEmail, FILTER_VALIDATE_EMAIL) && strlen($rawEmail) <= 254) {
+                    $notifyEmail = $rawEmail;
+                }
+            }
+            if ($notifyEmail === '') {
+                $error = t('err.notify_email_invalid');
+            }
+        }
+
+        if ($error === '') {
         try {
             $token  = bin2hex(random_bytes(16));
             $aesKey = bin2hex(random_bytes(32));
@@ -196,6 +217,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'hash'     => $hashPass,
             'expires'  => $expires,
             'attempts' => 0,
+            // Notifiche opzionali: campi presenti solo se l'utente ha
+            // flaggato la checkbox. La lingua serve per recapitare la mail
+            // nella stessa lingua scelta in fase di creazione, indipendente
+            // dall'Accept-Language del lettore.
+            'notify_email' => $notifyEmail,
+            'lang'         => snm_lang(),
         ]);
 
         $finalPath = "{$storage}/{$token}";
@@ -229,6 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Chiave nel FRAGMENT: mai inviata al server tramite il link
         $link = "{$proto}://{$host}{$path}/view.php?token={$token}#{$aesKey}";
+        } // chiusura: if ($error === '')
     }
 }
 
@@ -291,6 +319,23 @@ umask($oldUmask);
           <option value="14"><?= htmlspecialchars(t('index.opt.14days'), ENT_QUOTES, 'UTF-8') ?></option>
           <option value="30"><?= htmlspecialchars(t('index.opt.30days'), ENT_QUOTES, 'UTF-8') ?></option>
         </select>
+
+        <?php if (snm_mail_enabled()): /* Mostra blocco notifiche solo se SMTP e' configurato e attivo in mailconfig.php */ ?>
+        <label for="notify_email" class="field-label"><?= htmlspecialchars(t('index.label.notify_email'), ENT_QUOTES, 'UTF-8') ?></label>
+        <input
+          type="email"
+          name="notify_email"
+          id="notify_email"
+          placeholder="<?= htmlspecialchars(t('index.placeholder.notify_email'), ENT_QUOTES, 'UTF-8') ?>"
+          autocomplete="off"
+          maxlength="254"
+          class="pw-input">
+
+        <label class="checkbox-row" for="notify_enabled">
+          <input type="checkbox" name="notify_enabled" id="notify_enabled" value="1">
+          <span><?= htmlspecialchars(t('index.label.notify_cb'), ENT_QUOTES, 'UTF-8') ?></span>
+        </label>
+        <?php endif; ?>
 
         <button type="submit" class="generate"><?= htmlspecialchars(t('index.btn.generate'), ENT_QUOTES, 'UTF-8') ?></button>
       </form>

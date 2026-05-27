@@ -12,6 +12,7 @@
  */
 
 require_once __DIR__ . '/lang.php';
+require_once __DIR__ . '/mail.php';
 
 // --- Security headers ---
 header('Referrer-Policy: no-referrer');
@@ -280,6 +281,17 @@ if (!file_exists($filePath)) {
 
         $attempts = (int)($obj['attempts'] ?? 0);
 
+        // --- Dati per le notifiche email ---
+        // Catturati PRIMA di modificare/cancellare il file: $obj sara'
+        // rivalutato sulle branch wrong-pass / success, ma queste variabili
+        // restano stabili e ci servono dopo l'@unlink() del file.
+        $notifyEmail = isset($obj['notify_email']) && is_string($obj['notify_email'])
+            ? $obj['notify_email'] : '';
+        $notifyLang  = isset($obj['lang']) && is_string($obj['lang'])
+            ? $obj['lang'] : snm_lang();
+        // ID breve mostrato nella notifica: primi 8 caratteri del token.
+        $notifyId    = substr($token, 0, 8);
+
         if ($attempts >= MAX_ATTEMPTS) {
             ftruncate($fp, 0);
             flock($fp, LOCK_UN);
@@ -301,6 +313,13 @@ if (!file_exists($filePath)) {
 
             if ($obj['attempts'] >= MAX_ATTEMPTS) {
                 @unlink($filePath);
+                // Notifica "distrutto": il segreto e' stato eliminato per
+                // aver superato MAX_ATTEMPTS tentativi errati. Invio dopo
+                // l'unlink in modo che il file non esista piu' a prescindere
+                // dall'esito dell'invio.
+                if ($notifyEmail !== '') {
+                    snm_send_notification_deferred($notifyEmail, $notifyId, 'destroyed', $notifyLang);
+                }
                 render_error_page(t('err.too_many'), 429);
             }
             $error = t('err.wrong_pass');
@@ -347,6 +366,15 @@ if (!file_exists($filePath)) {
                     @unlink($filePath);
 
                     $decrypted = $plain;
+
+                    // Notifica "letto": segreto aperto correttamente e
+                    // contestualmente distrutto. Inviata dopo l'unlink in
+                    // modo che il file non esista piu' a prescindere
+                    // dall'esito dell'invio. Errori SMTP non bloccano
+                    // la visualizzazione del segreto all'utente.
+                    if ($notifyEmail !== '') {
+                        snm_send_notification_deferred($notifyEmail, $notifyId, 'read', $notifyLang);
+                    }
                 }
             }
         }

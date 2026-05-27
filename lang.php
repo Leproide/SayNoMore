@@ -110,6 +110,9 @@ function snm_translations(): array {
             'index.opt.14days'            => '14 giorni',
             'index.opt.30days'            => '30 giorni (massimo)',
             'index.btn.generate'          => 'Genera link',
+            'index.label.notify_email'    => 'Email per notifiche (opzionale)',
+            'index.placeholder.notify_email' => 'tua@email.it',
+            'index.label.notify_cb'       => 'Inviami una mail quando il segreto viene letto o distrutto',
             'index.link.label'            => 'Link generato (copia e invia):',
             'index.btn.copy'              => 'Copia',
             'index.btn.copy.success'      => 'Copiato!',
@@ -143,6 +146,7 @@ function snm_translations(): array {
             'err.busy'                    => 'Richiesta in corso, riprova.',
             'err.too_many'                => 'Troppi tentativi falliti. Il segreto è stato distrutto.',
             'err.wrong_pass'              => 'Password errata.',
+            'err.notify_email_invalid'    => 'Email di notifica non valida.',
 
             // Footer
             'footer.tagline'              => 'Made with &#x1F480; by Leprechaun',
@@ -165,6 +169,9 @@ function snm_translations(): array {
             'index.opt.14days'            => '14 days',
             'index.opt.30days'            => '30 days (maximum)',
             'index.btn.generate'          => 'Generate link',
+            'index.label.notify_email'    => 'Notification email (optional)',
+            'index.placeholder.notify_email' => 'you@email.com',
+            'index.label.notify_cb'       => 'Email me when the secret is read or destroyed',
             'index.link.label'            => 'Link generated (copy and send):',
             'index.btn.copy'              => 'Copy',
             'index.btn.copy.success'      => 'Copied!',
@@ -198,6 +205,7 @@ function snm_translations(): array {
             'err.busy'                    => 'Request in progress, please retry.',
             'err.too_many'                => 'Too many failed attempts. The secret has been destroyed.',
             'err.wrong_pass'              => 'Wrong password.',
+            'err.notify_email_invalid'    => 'Invalid notification email.',
 
             // Footer
             'footer.tagline'              => 'Made with &#x1F480; by Leprechaun',

@@ -14,6 +14,7 @@ SayNoMore is a simple One Time Secret service for sharing passwords or sensitive
 - 🧼 Destruction after read (with best-effort overwrite, see notes below)
 - 🛡 Anti-abuse mitigations: 64 KB secret size limit, max 5 password attempts, uniform timing against token enumeration, input type validation against malformed requests
 - 🌍 Multilingual: Italian for Italian browsers, English everywhere else (based on `Accept-Language`)
+- 📬 Optional email notifications (off by default): when enabled in `mailconfig.php`, the creator can tick a checkbox to receive an email when the secret is opened or destroyed after too many failed attempts
 - 🧅 Tor support: links generated on `.onion` hidden services automatically use `http://` instead of `https://`
 - 💻 No database required, just the file system
 
@@ -114,6 +115,54 @@ The interface language is automatically selected based on the browser's `Accept-
 All UI strings live in `lang.php`, which contains a translation table for both languages. To add a new language: add a new entry to the array returned by `snm_translations()` and update the language detection in `snm_lang()`.
 
 CLI output (`cleanup.php`) is always in English, since the script is intended for system administrators.
+
+## 📬 Email notifications (optional)
+
+SayNoMore can optionally email the secret creator when the secret is read or destroyed after too many failed password attempts. The feature is **off by default** and is configured entirely in `mailconfig.php`.
+
+### Enable
+
+Edit `mailconfig.php` and set `enabled` to `true`, then fill in your SMTP credentials:
+
+```php
+return [
+    'enabled'   => true,
+    'host'      => 'smtp.example.com',
+    'port'      => 587,
+    'secure'    => 'tls',                // 'ssl' | 'tls' | ''
+    'username'  => 'noreply@example.com',
+    'password'  => 'your-smtp-password',
+    'from'      => 'noreply@example.com',
+    'from_name' => 'SayNoMore',
+    'timeout'   => 10,
+];
+```
+
+Common SMTP profiles:
+
+| Mode | Port | `secure` |
+|---|---|---|
+| SSL implicit | 465 | `'ssl'` |
+| STARTTLS (recommended) | 587 | `'tls'` |
+| Plaintext (internal only) | 25 | `''` |
+
+### How it works
+
+- When `enabled` is `true`, an additional **email field** and a **checkbox** ("Email me when the secret is read or destroyed") appear in the secret creation form
+- If the user ticks the checkbox, the address is validated and stored inside the secret payload along with the language chosen at creation time
+- Two notifications can be triggered:
+  - **Secret read**: sent right after the recipient successfully decrypts the secret
+  - **Secret destroyed**: sent right after the secret is deleted following the maximum number of failed password attempts
+- The notification is localized in the same language as the creator's UI (Italian or English)
+- The email contains a short ID (first 8 characters of the token) plus date and time
+- When `enabled` is `false` the checkbox is **not shown** and the application behaves exactly as before
+
+### Implementation notes
+
+- The SMTP client is implemented natively (no PHPMailer, no Composer dependency); see `mail.php`
+- Supports `AUTH LOGIN`, multipart/alternative bodies (plaintext + HTML), STARTTLS and SSL
+- Failures are silent for the end user: SMTP errors only get logged via `error_log()` so that a misconfigured SMTP server never breaks the secret read flow
+- The notification email is stored in clear text inside the secret file; protect the `data/` directory just like for the secret payload itself (see the Security section)
 
 ## 🧹 Expired secret cleanup
 
