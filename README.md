@@ -85,7 +85,7 @@ then **delete the file immediately**:
 rm argon-check.php
 ```
 
-Leaving it online would expose your PHP version and capabilities — useful
+Leaving it online would expose your PHP version and capabilities, useful
 information for an attacker.
 
 ## ⚙️ Configuration
