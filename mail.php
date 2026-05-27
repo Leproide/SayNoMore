@@ -58,7 +58,7 @@ function snm_mail_enabled(): bool {
  * @param string $tokenId  Identificatore breve da mostrare (es. primi 8 char del token)
  * @param string $event    'read' oppure 'destroyed'
  * @param string $lang     'it' o 'en' (lingua scelta alla creazione del segreto)
- * @return bool true se l'invio e' stato accettato dal server SMTP
+ * @return bool true se l'invio è stato accettato dal server SMTP
  */
 function snm_send_notification(string $to, string $tokenId, string $event, string $lang = 'en'): bool {
     if (!snm_mail_enabled()) return false;
@@ -325,15 +325,22 @@ function snm_smtp_send(array $cfg, string $to, string $subject, string $bodyText
     $headers[] = 'Content-Type: multipart/alternative; boundary="' . $boundary . '"';
     $headers[] = 'X-Mailer: SayNoMore';
 
+    // Corpo multipart/alternative con quoted-printable.
+    // Necessario per evitare che righe HTML troppo lunghe (l'HTML qui e' una
+    // singola riga ~1.5KB) vengano soft-wrappate dagli MTA: il wrap puo'
+    // cadere dentro una parola e Outlook su Windows la rende con uno spazio
+    // visibile (es. "co rrettamente"). quoted_printable_encode() inserisce
+    // soft break "=\r\n" a 76 char, che il client email decodifica
+    // rimuovendoli, garantendo che nessuna parola venga spezzata.
     $body  = '';
     $body .= '--' . $boundary . "\r\n";
     $body .= 'Content-Type: text/plain; charset=UTF-8' . "\r\n";
-    $body .= 'Content-Transfer-Encoding: 8bit' . "\r\n\r\n";
-    $body .= $bodyText . "\r\n";
+    $body .= 'Content-Transfer-Encoding: quoted-printable' . "\r\n\r\n";
+    $body .= quoted_printable_encode($bodyText) . "\r\n";
     $body .= '--' . $boundary . "\r\n";
     $body .= 'Content-Type: text/html; charset=UTF-8' . "\r\n";
-    $body .= 'Content-Transfer-Encoding: 8bit' . "\r\n\r\n";
-    $body .= $bodyHtml . "\r\n";
+    $body .= 'Content-Transfer-Encoding: quoted-printable' . "\r\n\r\n";
+    $body .= quoted_printable_encode($bodyHtml) . "\r\n";
     $body .= '--' . $boundary . '--' . "\r\n";
 
     $data = implode("\r\n", $headers) . "\r\n\r\n" . $body;
