@@ -52,7 +52,7 @@ even with the correct password.
 Run this from the same environment that serves the app:
 
 ```bash
-php -r &quot;echo &#39;Argon2id: &#39;, (defined(&#39;PASSWORD_ARGON2ID&#39;) ? &#39;OK&#39; : &#39;MISSING&#39;), PHP_EOL, &#39;OpenSSL: &#39;, (extension_loaded(&#39;openssl&#39;) ? &#39;OK&#39; : &#39;MISSING&#39;), PHP_EOL, &#39;AES-256-GCM: &#39;, (in_array(&#39;aes-256-gcm&#39;, openssl_get_cipher_methods(), true) ? &#39;OK&#39; : &#39;MISSING&#39;), PHP_EOL, &#39;random_bytes: &#39;, (function_exists(&#39;random_bytes&#39;) ? &#39;OK&#39; : &#39;MISSING&#39;), PHP_EOL;&quot;
+php -r "echo 'Argon2id: ', (defined('PASSWORD_ARGON2ID') ? 'OK' : 'MISSING'), PHP_EOL, 'OpenSSL: ', (extension_loaded('openssl') ? 'OK' : 'MISSING'), PHP_EOL, 'AES-256-GCM: ', (in_array('aes-256-gcm', openssl_get_cipher_methods(), true) ? 'OK' : 'MISSING'), PHP_EOL, 'random_bytes: ', (function_exists('random_bytes') ? 'OK' : 'MISSING'), PHP_EOL;"
 ```
 
 Expected output:
