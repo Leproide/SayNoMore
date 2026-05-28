@@ -126,6 +126,9 @@ if (CLEANUP_ENABLED) {
 
 $link  = '';
 $error = '';
+// Quando true, il messaggio di errore in alto viene reso in grassetto
+// (usato per l'errore "password obbligatoria", per dargli piu' risalto).
+$errorBold = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -136,8 +139,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_string($secretInput) || !is_string($passInput)) {
         http_response_code(400);
         $error = t('err.input_invalid');
-    } elseif ($secretInput === '' || $passInput === '') {
+    } elseif ($secretInput === '') {
+        // Form vuoto / nessun segreto: nessun messaggio (il textarea e'
+        // gia' required lato client).
         $error = '';
+    } elseif ($passInput === '') {
+        // Segreto presente ma password mancante: la password e' obbligatoria.
+        $error = t('err.password_required');
+        $errorBold = true;
     } elseif (strlen($secretInput) > MAX_SECRET_BYTES) {
         http_response_code(413);
         $error = t('err.too_large', ['size' => (int)(MAX_SECRET_BYTES / 1024)]);
@@ -277,7 +286,11 @@ umask($oldUmask);
     <h1>SayNoMore</h1>
 
     <?php if ($error !== ''): ?>
-      <p class="error-text"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
+      <p class="error-text<?= $errorBold ? ' error-strong' : '' ?>"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
+    <?php endif; ?>
+
+    <?php if (snm_mail_debug()): /* Avviso: il logging di debug email e' attivo (mailconfig.php) */ ?>
+      <p class="error-text error-strong"><?= htmlspecialchars(t('index.maildebug_warning'), ENT_QUOTES, 'UTF-8') ?></p>
     <?php endif; ?>
 
     <?php if ($link): ?>
@@ -296,12 +309,13 @@ umask($oldUmask);
         <form action="index.php" method="get"><button type="submit" class="generate"><?= htmlspecialchars(t('index.btn.new'), ENT_QUOTES, 'UTF-8') ?></button></form>
       </div>
     <?php else: ?>
-      <form method="POST" autocomplete="off">
+      <form method="POST" autocomplete="off" id="snmForm">
         <textarea
           name="secret"
           placeholder="<?= htmlspecialchars(t('index.placeholder.secret'), ENT_QUOTES, 'UTF-8') ?>"
           required
-          maxlength="<?= MAX_SECRET_BYTES ?>"></textarea>
+          maxlength="<?= MAX_SECRET_BYTES ?>"
+          data-required-msg="<?= htmlspecialchars(t('index.required_field'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
 
         <input
           type="password"
@@ -309,7 +323,8 @@ umask($oldUmask);
           placeholder="<?= htmlspecialchars(t('index.placeholder.password'), ENT_QUOTES, 'UTF-8') ?>"
           required
           autocomplete="new-password"
-          class="pw-input">
+          class="pw-input"
+          data-required-msg="<?= htmlspecialchars(t('err.password_required'), ENT_QUOTES, 'UTF-8') ?>">
 
         <label for="expiry_days" class="field-label"><?= htmlspecialchars(t('index.label.expiry'), ENT_QUOTES, 'UTF-8') ?></label>
         <select name="expiry_days" id="expiry_days" class="pw-input">
@@ -320,21 +335,34 @@ umask($oldUmask);
           <option value="30"><?= htmlspecialchars(t('index.opt.30days'), ENT_QUOTES, 'UTF-8') ?></option>
         </select>
 
-        <?php if (snm_mail_enabled()): /* Mostra blocco notifiche solo se SMTP e' configurato e attivo in mailconfig.php */ ?>
-        <label for="notify_email" class="field-label"><?= htmlspecialchars(t('index.label.notify_email'), ENT_QUOTES, 'UTF-8') ?></label>
-        <input
-          type="email"
-          name="notify_email"
-          id="notify_email"
-          placeholder="<?= htmlspecialchars(t('index.placeholder.notify_email'), ENT_QUOTES, 'UTF-8') ?>"
-          autocomplete="off"
-          maxlength="254"
-          class="pw-input">
-
+        <?php if (snm_mail_enabled()):
+          /* Mostra blocco notifiche solo se SMTP e' configurato e attivo in
+           * mailconfig.php. La checkbox sta SOPRA il campo email: il campo
+           * email compare solo quando la checkbox e' spuntata (toggle lato JS
+           * in script.js). Su un re-render dopo errore di validazione lo stato
+           * checkbox/email viene ripristinato cosi' l'utente non perde i dati. */
+          $notifyChecked  = !empty($_POST['notify_enabled']);
+          $notifyEmailVal = (isset($_POST['notify_email']) && is_string($_POST['notify_email'])) ? $_POST['notify_email'] : '';
+        ?>
         <label class="checkbox-row" for="notify_enabled">
-          <input type="checkbox" name="notify_enabled" id="notify_enabled" value="1">
+          <input type="checkbox" name="notify_enabled" id="notify_enabled" value="1"<?= $notifyChecked ? ' checked' : '' ?>>
           <span><?= htmlspecialchars(t('index.label.notify_cb'), ENT_QUOTES, 'UTF-8') ?></span>
         </label>
+
+        <div id="notifyEmailWrap"<?= $notifyChecked ? '' : ' hidden' ?>>
+          <label for="notify_email" class="field-label"><?= htmlspecialchars(t('index.label.notify_email'), ENT_QUOTES, 'UTF-8') ?></label>
+          <input
+            type="email"
+            name="notify_email"
+            id="notify_email"
+            placeholder="<?= htmlspecialchars(t('index.placeholder.notify_email'), ENT_QUOTES, 'UTF-8') ?>"
+            value="<?= htmlspecialchars($notifyEmailVal, ENT_QUOTES, 'UTF-8') ?>"
+            autocomplete="off"
+            maxlength="254"
+            data-required-msg="<?= htmlspecialchars(t('index.required_field'), ENT_QUOTES, 'UTF-8') ?>"
+            data-invalid-msg="<?= htmlspecialchars(t('err.notify_email_invalid'), ENT_QUOTES, 'UTF-8') ?>"
+            class="pw-input">
+        </div>
         <?php endif; ?>
 
         <button type="submit" class="generate"><?= htmlspecialchars(t('index.btn.generate'), ENT_QUOTES, 'UTF-8') ?></button>

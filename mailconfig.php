@@ -5,9 +5,9 @@
  * SMTP configuration for optional email notifications.
  *
  * Set 'enabled' => true to enable this feature: when enabled, the secret
- * creation form will display a "Notify me by email" checkbox and an email
- * field. If the checkbox is checked and the email is valid, two types of
- * notifications may be sent:
+ * creation form will display a "Notify me by email" checkbox; the email
+ * field appears only once the checkbox is ticked. If the checkbox is checked
+ * and the email is valid, two types of notifications may be sent:
  *   - Secret opened and read successfully
  *   - Secret destroyed after too many failed attempts
  *
@@ -37,6 +37,26 @@ return [
     // Visible sender shown to the recipient
     'from'      => 'noreply@example.com',
     'from_name' => 'SayNoMore',
+
+    // Public site URL. If set (http/https), the word "SayNoMore" in the
+    // notification email footer becomes a clickable link to this address.
+    // Leave empty to render the footer brand as plain text.
+    'site_url'  => '',
+
+    // How many times to attempt the SMTP send before giving up. The send
+    // stops as soon as the server confirms acceptance (SMTP 250 after DATA),
+    // so a delivered message is never sent more than once. Retries only
+    // happen when a previous attempt failed before that confirmation.
+    'max_retries' => 3,
+
+    // Debug logging. When true, every step of the notification pipeline
+    // (generation, full SMTP conversation, raw message, errors) is appended
+    // to "maildebug.txt" in this same folder, and a red warning is shown on
+    // the home page. SMTP credentials are NEVER written to the log.
+    // WARNING: the log can contain recipient addresses and message content.
+    // Keep it OFF in production and protect the "data/"-style access to this
+    // file (the file lives in the document root). Use only to diagnose.
+    'debug'     => false,
 
     // Connection/read timeout in seconds
     'timeout'   => 10,

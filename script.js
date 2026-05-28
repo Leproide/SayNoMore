@@ -105,6 +105,59 @@
         attachCopyButton(copyBtn, function () { return linkInput.value; }, 2000);
     }
 
+    // -------- index.php : campo email notifiche visibile solo se checkbox ON --------
+    // La checkbox sta sopra il campo email; il campo compare solo quando la
+    // checkbox e' spuntata. sync() viene chiamata anche all'avvio per allineare
+    // lo stato a un eventuale re-render server-side (es. dopo errore di
+    // validazione) in cui la checkbox risulta gia' flaggata.
+    // Quando la checkbox e' ON il campo diventa "required" (cosi' compare il
+    // popup nativo localizzato se vuoto/non valido); quando e' OFF il campo
+    // viene disabilitato, cosi' un eventuale valore non valido rimasto non
+    // blocca invisibilmente il submit (un campo hidden resterebbe comunque
+    // soggetto a validazione del formato email).
+    const notifyCb    = document.getElementById('notify_enabled');
+    const notifyWrap  = document.getElementById('notifyEmailWrap');
+    const notifyEmail = document.getElementById('notify_email');
+    if (notifyCb && notifyWrap) {
+        const sync = function () {
+            const on = notifyCb.checked;
+            notifyWrap.hidden = !on;
+            if (notifyEmail) {
+                notifyEmail.disabled = !on;
+                notifyEmail.required = on;
+                if (!on) notifyEmail.setCustomValidity('');
+            }
+        };
+        notifyCb.addEventListener('change', sync);
+        sync();
+    }
+
+    // -------- index.php : messaggi di validazione localizzati --------
+    // Il messaggio nativo del browser (es. "compila questo campo") segue la
+    // lingua del BROWSER, non quella della pagina. Per i campi con
+    // data-required-msg / data-invalid-msg (textarea segreto, password, email)
+    // sostituiamo quel messaggio con la stringa tradotta da lang.php, coerente
+    // con la lingua della pagina:
+    //   - valueMissing (campo vuoto)   -> data-required-msg
+    //   - typeMismatch (es. email mal formattata) -> data-invalid-msg
+    // Il messaggio va impostato solo nell'evento invalid e azzerato appena
+    // l'utente digita, altrimenti il campo resterebbe sempre invalido.
+    const reqFields = document.querySelectorAll('#snmForm [data-required-msg], #snmForm [data-invalid-msg]');
+    reqFields.forEach(function (field) {
+        field.addEventListener('invalid', function () {
+            if (field.validity.valueMissing && field.dataset.requiredMsg) {
+                field.setCustomValidity(field.dataset.requiredMsg);
+            } else if (field.validity.typeMismatch && field.dataset.invalidMsg) {
+                field.setCustomValidity(field.dataset.invalidMsg);
+            } else {
+                field.setCustomValidity('');
+            }
+        });
+        field.addEventListener('input', function () {
+            field.setCustomValidity('');
+        });
+    });
+
     // -------- view.php : recupera chiave dal fragment --------
     const keyField = document.getElementById('keyField');
     const unlockForm = document.getElementById('unlockForm');

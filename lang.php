@@ -102,6 +102,7 @@ function snm_translations(): array {
 
             // Form index
             'index.placeholder.secret'    => 'Inserisci il tuo segreto...',
+            'index.required_field'        => 'Compila questo campo.',
             'index.placeholder.password'  => 'Inserisci una password',
             'index.label.expiry'          => 'Scadenza del link:',
             'index.opt.1day'              => '1 giorno',
@@ -113,6 +114,7 @@ function snm_translations(): array {
             'index.label.notify_email'    => 'Email per notifiche (opzionale)',
             'index.placeholder.notify_email' => 'tua@email.it',
             'index.label.notify_cb'       => 'Inviami una mail quando il segreto viene letto o distrutto',
+            'index.maildebug_warning'     => '⚠ Debug email attivo: ogni invio viene registrato in maildebug.txt. Disattivalo in produzione.',
             'index.link.label'            => 'Link generato (copia e invia):',
             'index.btn.copy'              => 'Copia',
             'index.btn.copy.success'      => 'Copiato!',
@@ -147,6 +149,7 @@ function snm_translations(): array {
             'err.too_many'                => 'Troppi tentativi falliti. Il segreto è stato distrutto.',
             'err.wrong_pass'              => 'Password errata.',
             'err.notify_email_invalid'    => 'Email di notifica non valida.',
+            'err.password_required'       => 'La password è obbligatoria.',
 
             // Footer
             'footer.tagline'              => 'Made with &#x1F480; by Leprechaun',
@@ -161,6 +164,7 @@ function snm_translations(): array {
 
             // Index form
             'index.placeholder.secret'    => 'Enter your secret...',
+            'index.required_field'        => 'Please fill out this field.',
             'index.placeholder.password'  => 'Enter a password',
             'index.label.expiry'          => 'Link expiry:',
             'index.opt.1day'              => '1 day',
@@ -172,6 +176,7 @@ function snm_translations(): array {
             'index.label.notify_email'    => 'Notification email (optional)',
             'index.placeholder.notify_email' => 'you@email.com',
             'index.label.notify_cb'       => 'Email me when the secret is read or destroyed',
+            'index.maildebug_warning'     => '⚠ Mail debug enabled: every send is logged to maildebug.txt. Turn it off in production.',
             'index.link.label'            => 'Link generated (copy and send):',
             'index.btn.copy'              => 'Copy',
             'index.btn.copy.success'      => 'Copied!',
@@ -206,6 +211,7 @@ function snm_translations(): array {
             'err.too_many'                => 'Too many failed attempts. The secret has been destroyed.',
             'err.wrong_pass'              => 'Wrong password.',
             'err.notify_email_invalid'    => 'Invalid notification email.',
+            'err.password_required'       => 'Password is required.',
 
             // Footer
             'footer.tagline'              => 'Made with &#x1F480; by Leprechaun',

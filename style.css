@@ -278,6 +278,10 @@ button.generate {
     margin-bottom: 1rem;
     font-size: 0.9rem;
 }
+/* Variante in grassetto (es. errore "password obbligatoria", avviso debug) */
+.error-text.error-strong {
+    font-weight: 700;
+}
 
 /* Override autofill Chrome/Edge */
 input:-webkit-autofill,
