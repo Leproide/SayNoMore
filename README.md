@@ -1,16 +1,15 @@
 # SayNoMore
 
-#saynomore
-
 SayNoMore is a simple One Time Secret service for sharing passwords or sensitive information that can only be viewed once.
 
-> ### ⚠ BREAKING UPDATE — v6 (end-to-end encryption)
->
+> ### ⚠ BREAKING UPDATE (end-to-end encryption)
+> 
 > Starting from **v6**, encryption and decryption happen **entirely in the browser** (Web Crypto, AES-256-GCM). The server never sees the plaintext nor the AES key, in any phase.
->
+> 
 > **This is a breaking change. Read before upgrading:**
+> 
 > - **Secrets created with previous versions become unreadable.** The on-disk storage format and the key scheme changed. Since secrets are ephemeral (max 30 days), do a clean cutover: empty the `data/` folder on deploy, or wait for old secrets to expire.
-> - **Creating and reading now require JavaScript and a secure context.** On clearnet you need **HTTPS**; on a `.onion` hidden service it works (onion is a trusted context). On plain-HTTP clearnet, encryption is disabled with an explicit on-screen message — never a silent downgrade.
+> - **Creating and reading now require JavaScript and a secure context.** On clearnet you need **HTTPS**; on a `.onion` hidden service it works (onion is a trusted context). On plain-HTTP clearnet, encryption is disabled with an explicit on-screen message, never a silent downgrade.
 > - **OpenSSL is no longer required on the server** for secret encryption (it moved to the browser). It is still used only by the optional email notifications when SSL/STARTTLS is selected.
 > - `cleanup.php`, `ExpireCheck.sh` and the email notifications are **unchanged and fully compatible** with the new format (they rely on the `expires`/`created` fields and on the secret filename, none of which changed).
 
@@ -52,6 +51,7 @@ SayNoMore is a simple One Time Secret service for sharing passwords or sensitive
 ## 🛠️ Requirements
 
 **Server**
+
 - PHP 7.4+ (8.x recommended)
 - Argon2id available (PHP built with libargon2, default on modern distros)
 - `random_bytes` / `random_int` (CSPRNG)
@@ -62,6 +62,7 @@ SayNoMore is a simple One Time Secret service for sharing passwords or sensitive
 - OpenSSL is **not** required for secret encryption anymore (it now runs in the browser); it is only used by the optional email notifications over SSL/STARTTLS.
 
 **Client (browser)**
+
 - JavaScript enabled (required to encrypt on creation and to read the key on viewing)
 - Web Crypto API (`crypto.subtle`) — available in any modern browser
 - **Secure context**: HTTPS, `localhost`, or a `.onion` address. On plain-HTTP clearnet the app refuses to encrypt/decrypt and shows a message.
@@ -70,19 +71,19 @@ SayNoMore is a simple One Time Secret service for sharing passwords or sensitive
 
 The main parameters are constants at the top of `index.php`, `view.php`, and `cleanup.php`:
 
-| Constant            | File                 | Default        | Description                                                                                                              |
-| ------------------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `DEFAULT_TTL_DAYS`  | index.php            | 7              | Default validity in days for new secrets                                                                                 |
-| `MIN_TTL_DAYS`      | index.php            | 1              | Minimum TTL selectable by the user                                                                                       |
-| `MAX_TTL_DAYS`      | index.php            | 30             | Maximum TTL selectable by the user                                                                                       |
-| `MAX_SECRET_BYTES`  | index.php            | 65536 (64 KB)  | Plaintext size limit (enforced client-side and re-checked server-side as `ciphertext − 16` byte GCM tag)                |
-| `MAX_CT_B64_BYTES`  | index.php            | 98304 (96 KB)  | Hard cap on the base64 ciphertext accepted by the server (bounds memory before decoding)                                |
-| `GCM_IV_LEN`        | index.php            | 12             | Expected GCM IV length in bytes (validated server-side)                                                                  |
-| `MAX_ATTEMPTS`      | view.php             | 5              | Maximum number of password attempts before destruction                                                                   |
-| `CLEANUP_ENABLED`   | index.php / view.php | true           | Master switch for in-request cleanup. Set to `false` to disable it entirely (useful when you run `cleanup.php` via cron) |
-| `CLEANUP_PROB_PCT`  | index.php / view.php | 50             | Probability (%) of running a global cleanup on each request (ignored when `CLEANUP_ENABLED` is `false`)                  |
-| `TMP_ORPHAN_TTL`    | all                  | 3600           | Orphan temporary files (failed writes) older than X seconds are removed                                                  |
-| `LEGACY_TTL_SEC`    | all                  | 7 days         | Fallback TTL for secrets created with previous versions (`created` field)                                                |
+| Constant           | File                 | Default       | Description                                                                                                              |
+| ------------------ | -------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `DEFAULT_TTL_DAYS` | index.php            | 7             | Default validity in days for new secrets                                                                                 |
+| `MIN_TTL_DAYS`     | index.php            | 1             | Minimum TTL selectable by the user                                                                                       |
+| `MAX_TTL_DAYS`     | index.php            | 30            | Maximum TTL selectable by the user                                                                                       |
+| `MAX_SECRET_BYTES` | index.php            | 65536 (64 KB) | Plaintext size limit (enforced client-side and re-checked server-side as `ciphertext − 16` byte GCM tag)                 |
+| `MAX_CT_B64_BYTES` | index.php            | 98304 (96 KB) | Hard cap on the base64 ciphertext accepted by the server (bounds memory before decoding)                                 |
+| `GCM_IV_LEN`       | index.php            | 12            | Expected GCM IV length in bytes (validated server-side)                                                                  |
+| `MAX_ATTEMPTS`     | view.php             | 5             | Maximum number of password attempts before destruction                                                                   |
+| `CLEANUP_ENABLED`  | index.php / view.php | true          | Master switch for in-request cleanup. Set to `false` to disable it entirely (useful when you run `cleanup.php` via cron) |
+| `CLEANUP_PROB_PCT` | index.php / view.php | 50            | Probability (%) of running a global cleanup on each request (ignored when `CLEANUP_ENABLED` is `false`)                  |
+| `TMP_ORPHAN_TTL`   | all                  | 3600          | Orphan temporary files (failed writes) older than X seconds are removed                                                  |
+| `LEGACY_TTL_SEC`   | all                  | 7 days        | Fallback TTL for secrets created with previous versions (`created` field)                                                |
 
 ### Storage format (on disk, in `data/`)
 
@@ -174,6 +175,8 @@ const CLEANUP_ENABLED = false;
 
 **Protect the `data/` folder.** The script creates `data/` inside the document root. It is **strongly recommended** to block its web access (`.htaccess` with `Require all denied` on Apache, or a `location` deny rule on nginx), or to move it outside the document root by editing `$storage` in `index.php`, `view.php`, and `cleanup.php`. Note that even if `data/` is read by an attacker, the secrets remain confidential (no `K_frag` is stored), but the `notify_email` metadata is stored in clear and would be exposed — do not rely on `data/` exposure being harmless.
 
+**Protect the `mailconfig.php` file.** 
+
 ### Apache
 
 Create a `.htaccess` file inside `data/`:
@@ -194,6 +197,10 @@ Deny from all
 location ^~ /data/ {
     deny all;
     return 403;
+}
+
+location = /mailconfig.php {
+        return 404;
 }
 ```
 
@@ -226,13 +233,13 @@ bash ExpireCheck.sh /var/www/saynomore/data
 
 # Threat model (quick reference)
 
-| Adversary                                   | Outcome                                                                                  |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Server compromised at rest (`data/` read)   | Sees `iv`, `ct`, Argon2id hash, `notify_email`. **Cannot decrypt** (no `K_frag`).        |
-| Malicious/MITM server in the request path   | Sees the password (gate). **Never receives `K_frag`** → cannot decrypt.                  |
-| Has the link, not the password              | Blocked by the server-side 5-attempt gate; ciphertext never released.                    |
-| Has the password, not the link (`K_frag`)   | Server releases the ciphertext (and consumes it), but it cannot be decrypted.            |
-| Network observer (HTTPS)                     | Sees only TLS-encrypted traffic.                                                         |
+| Adversary                                 | Outcome                                                                           |
+| ----------------------------------------- | --------------------------------------------------------------------------------- |
+| Server compromised at rest (`data/` read) | Sees `iv`, `ct`, Argon2id hash, `notify_email`. **Cannot decrypt** (no `K_frag`). |
+| Malicious/MITM server in the request path | Sees the password (gate). **Never receives `K_frag`** → cannot decrypt.           |
+| Has the link, not the password            | Blocked by the server-side 5-attempt gate; ciphertext never released.             |
+| Has the password, not the link (`K_frag`) | Server releases the ciphertext (and consumes it), but it cannot be decrypted.     |
+| Network observer (HTTPS)                  | Sees only TLS-encrypted traffic.                                                  |
 
 Not covered by design: a malicious server could serve tampered JavaScript to exfiltrate the plaintext/key in the victim's browser. This is inherent to any browser-delivered E2E web app; mitigate with HTTPS, integrity controls, and trusting the operator/host.
 
@@ -253,5 +260,5 @@ This project is distributed under the **GNU General Public License v2.0 (GPL-2.0
 
 ## Author
 
-Created by **Leproide** — <https://github.com/Leproide>
+Created by **Leproide** <https://github.com/Leproide>
 Project: <https://github.com/Leproide/SayNoMore>
