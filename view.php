@@ -8,11 +8,11 @@
  *
  * Patch notes v6 (E2E):
  *  - La decifratura avviene NEL BROWSER. Il server non riceve piu' la chiave
- *    AES (K_frag) nel POST: riceve solo token + passphrase.
+ *    AES (fragKey) nel POST: riceve solo token + passphrase.
  *  - Flusso: il server verifica la password (gate: 5 tentativi, one-time,
  *    timing dummy invariati) e SOLO a password corretta restituisce iv + ct
- *    (JSON) distruggendo il file. Il client decifra localmente con K_frag.
- *  - Conseguenza: chi ha la password ma non K_frag riceve il ciphertext (che
+ *    (JSON) distruggendo il file. Il client decifra localmente con fragKey.
+ *  - Conseguenza: chi ha la password ma non fragKey riceve il ciphertext (che
  *    viene comunque consumato) ma non puo' leggerlo. Semantica one-time
  *    invariata. Il server non puo' decifrare in alcun caso.
  */

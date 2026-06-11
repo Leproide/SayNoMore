@@ -8,12 +8,12 @@
  *
  * Patch notes v6 (E2E):
  *  - Cifratura spostata NEL BROWSER (Web Crypto, AES-256-GCM). Il server non
- *    vede piu' il plaintext ne' la chiave AES (K_frag) in nessuna fase.
+ *    vede piu' il plaintext ne' la chiave AES (fragKey) in nessuna fase.
  *  - La creazione e' ora una API JSON: il client invia solo iv + ct
  *    (ciphertext+tag) + passphrase + TTL. Il server salva il ciphertext del
  *    client e l'hash Argon2id della passphrase; NON cifra nulla.
- *  - Il link (con K_frag nel fragment) viene costruito dal browser: il server
- *    non conosce K_frag.
+ *  - Il link (con fragKey nel fragment) viene costruito dal browser: il server
+ *    non conosce fragKey.
  *  - Requisiti: JavaScript + secure context (HTTPS o .onion). Su HTTP clearnet
  *    l'E2E e' disabilitato lato client con messaggio esplicito.
  */
@@ -259,7 +259,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     umask($oldUmask);
-    // Ritorniamo solo il token: il browser costruisce view.php?token=...#K_frag
+    // Ritorniamo solo il token: il browser costruisce view.php?token=...#fragKey
     snm_json(200, ['ok' => true, 'token' => $token]);
 }
 

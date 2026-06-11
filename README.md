@@ -33,17 +33,17 @@ SayNoMore is a simple One Time Secret service for sharing passwords or sensitive
 **Creating a secret**
 
 1. Enter a message, choose a password, and select how many days the link should remain valid.
-2. **In your browser**, JavaScript generates a random AES-256 key (`K_frag`) and IV and encrypts the message (AES-256-GCM). Plaintext and `K_frag` never leave the browser.
+2. **In your browser**, JavaScript generates a random AES-256 key (`fragKey`) and IV and encrypts the message (AES-256-GCM). Plaintext and `fragKey` never leave the browser.
 3. The browser sends to the server only the IV, the ciphertext (with auth tag), the password, and the TTL.
 4. The server hashes the password (Argon2id) and stores `{iv, ct, hash, expires, attempts}` — it does not encrypt anything and holds no key.
-5. The browser builds the link `view.php?token=...#K_frag` (the server never knows `K_frag`).
+5. The browser builds the link `view.php?token=...#fragKey` (the server never knows `fragKey`).
 
 **Reading a secret**
 
-1. The recipient opens the link; JavaScript reads `K_frag` from the URL fragment.
-2. The recipient enters the password; the browser sends only the `token` and the `password` (never `K_frag`).
+1. The recipient opens the link; JavaScript reads `fragKey` from the URL fragment.
+2. The recipient enters the password; the browser sends only the `token` and the `password` (never `fragKey`).
 3. The server verifies the password. On success it returns the stored IV + ciphertext **and destroys the file** (one-time). On wrong password it increments the counter; after 5 failures the secret is destroyed.
-4. The browser decrypts the ciphertext locally with `K_frag` and shows the secret; the fragment is then removed from the address bar. If `K_frag` is missing/corrupted, decryption fails client-side (the secret is already consumed).
+4. The browser decrypts the ciphertext locally with `fragKey` and shows the secret; the fragment is then removed from the address bar. If `fragKey` is missing/corrupted, decryption fails client-side (the secret is already consumed).
 
 > The password is **mandatory**: trying to generate a link without one shows a localized popup ("La password è obbligatoria." / "Password is required.") attached to the field. Validation messages are shown in the **page language** (not the browser language) by overriding the native message via `setCustomValidity`. The secret and (when notifications are on) the email field use the same mechanism. The empty-password rule is also enforced **server-side**, so no secret is ever created without a password.
 
@@ -272,6 +272,10 @@ const CLEANUP_ENABLED = false;
 ## 🔒 Important security notes
 
 **Key in the URL fragment (end-to-end).** The AES key is generated in the browser and used only in the browser. It sits after the `#`, so it never reaches the server — not in Apache/nginx logs, referer headers, link-preview systems (Slack/WhatsApp/Telegram), or proxy/CDN/WAF logs, and **not in the unlock POST either** (the browser sends only `token` + `password`; the server returns the ciphertext, which the browser decrypts locally). A compromised or malicious server — at rest or in the request path — therefore sees `iv`, `ct`, the Argon2id hash, and the password, but never the key, and cannot decrypt. The fragment is kept until the secret is successfully unlocked (so a reload after a wrong password still lets you retry within the attempt budget), then removed from the address bar/history via `history.replaceState`.
+
+> **Why is the IV sent to the server?** The IV (nonce) is **not secret** in AES-GCM — the only security requirement is that the (key, IV) pair is unique, not that the IV is hidden (see NIST SP 800-38D, §8). The IV is needed to decrypt, so it is stored next to the ciphertext and returned to the recipient's browser. Only the **key** must stay secret, and it never leaves the fragment. Sending the IV in clear is standard practice (TLS does the same) and does not weaken anything. In SayNoMore the point is moot anyway: every secret uses a fresh random key, so (key, IV) uniqueness is guaranteed by the key alone.
+
+**Fragment key encoding (base64url).** The key in the fragment is a 256-bit AES key encoded in **base64url** (`A–Z a–z 0–9 - _`, no padding) → **43 characters**, instead of the previous hex encoding (64 characters). This is purely an encoding change: same 256-bit key, shorter link. The IV is unaffected (it is non-secret and stays server-side). **Does this break anything?** No: the reader accepts **both** formats — new links are base64url, and any link generated before this change (64-hex fragment) is still decoded correctly. If you don't care about in-flight legacy links, you can drop the hex branch in `keyToBytes()`/the fragment validation regex in `script.js`. This change touches only `script.js`; the server and the `token` (still hex) are unchanged.
 
 **Secure context required.** Web Crypto's `crypto.subtle` only works in a secure context. On clearnet this means HTTPS; `.onion` services qualify. On plain-HTTP clearnet the app disables encryption/decryption and shows a clear message instead of silently weakening security.
 

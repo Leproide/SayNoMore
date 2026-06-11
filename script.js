@@ -7,11 +7,11 @@
  *
  * Patch notes v6 (E2E):
  *  - index.php: la cifratura AES-256-GCM avviene QUI (Web Crypto). Il browser
- *    genera K_frag + IV, cifra il plaintext e invia al server solo iv + ct.
- *    Il link (con K_frag nel fragment) viene costruito lato client.
+ *    genera fragKey + IV, cifra il plaintext e invia al server solo iv + ct.
+ *    Il link (con fragKey nel fragment) viene costruito lato client.
  *  - view.php : invia solo token + password; a password corretta il server
- *    restituisce iv + ct e il browser decifra localmente con K_frag.
- *  - K_frag non lascia MAI il browser in chiaro verso il server.
+ *    restituisce iv + ct e il browser decifra localmente con fragKey.
+ *  - fragKey non lascia MAI il browser in chiaro verso il server.
  *  - Richiede secure context (HTTPS o .onion): senza crypto.subtle l'E2E e'
  *    disabilitato con messaggio esplicito.
  */
@@ -59,17 +59,35 @@
         return out;
     }
 
+    // --- base64url (per la CHIAVE nel fragment: 32 byte -> 43 char, vs 64 hex) ---
+    // base64url = base64 con '+'->'-', '/'->'_', senza padding '='.
+    function bytesToB64url(bytes) {
+        return bytesToB64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function b64urlToBytes(s) {
+        s = s.replace(/-/g, '+').replace(/_/g, '/');
+        while (s.length % 4) s += '=';        // ripristina il padding per atob
+        return b64ToBytes(s);
+    }
+    // Decodifica la chiave dal fragment accettando ENTRAMBI i formati:
+    // base64url (43 char, formato attuale) e hex (64 char, link legacy pre-cambio).
+    function keyToBytes(keyStr) {
+        if (/^[a-fA-F0-9]{64}$/.test(keyStr)) return hexToBytes(keyStr);   // legacy
+        return b64urlToBytes(keyStr);                                       // base64url
+    }
+
     const enc = new TextEncoder();
     const dec = new TextDecoder();
 
-    /** Importa K_frag (32 byte) come chiave AES-GCM. */
+    /** Importa fragKey (32 byte) come chiave AES-GCM. */
     async function importKey(keyBytes, usages) {
         return window.crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, usages);
     }
 
     /**
      * Cifra plaintext con una chiave random fresca.
-     * @returns {Promise<{keyHex:string, ivB64:string, ctB64:string}>}
+     * La chiave per il fragment e' codificata in base64url (43 char).
+     * @returns {Promise<{keyStr:string, ivB64:string, ctB64:string}>}
      */
     async function encryptSecret(plaintext) {
         const keyBytes = window.crypto.getRandomValues(new Uint8Array(32)); // AES-256
@@ -81,15 +99,15 @@
             enc.encode(plaintext)
         );
         return {
-            keyHex: bytesToHex(keyBytes),          // -> fragment
+            keyStr: bytesToB64url(keyBytes),       // -> fragment (base64url, 43 char)
             ivB64:  bytesToB64(iv),                // -> server
             ctB64:  bytesToB64(new Uint8Array(ctBuf)) // ct+tag -> server
         };
     }
 
-    /** Decifra ct (ct+tag) con K_frag (hex). Lancia su fallimento (tag errato). */
-    async function decryptSecret(keyHex, ivB64, ctB64) {
-        const key = await importKey(hexToBytes(keyHex), ['decrypt']);
+    /** Decifra ct (ct+tag) con la chiave del fragment. Lancia su fallimento (tag errato). */
+    async function decryptSecret(keyStr, ivB64, ctB64) {
+        const key = await importKey(keyToBytes(keyStr), ['decrypt']);
         const ptBuf = await window.crypto.subtle.decrypt(
             { name: 'AES-GCM', iv: b64ToBytes(ivB64), tagLength: 128 },
             key,
@@ -246,12 +264,12 @@
                     return;
                 }
 
-                // 3) Costruisci il link lato client: K_frag resta nel fragment.
+                // 3) Costruisci il link lato client: fragKey resta nel fragment.
                 // origin+pathname ignora query/fragment correnti -> link sempre
                 // ben formato; lo schema http/https e' ereditato da origin
                 // (quindi onion=http e clearnet=https sono gestiti in automatico).
                 const base = window.location.origin + window.location.pathname.replace(/index\.php$/, '');
-                const link = base + 'view.php?token=' + encodeURIComponent(data.token) + '#' + out.keyHex;
+                const link = base + 'view.php?token=' + encodeURIComponent(data.token) + '#' + out.keyStr;
 
                 if (secretLink) secretLink.value = link;
                 if (resultBox)  resultBox.hidden = false;
@@ -285,10 +303,11 @@
         const secretBox   = document.getElementById('secretBox');
         const D = container ? container.dataset : {};
 
-        // Leggi K_frag dal fragment (mai inviata al server)
+        // Leggi la chiave dal fragment (mai inviata al server)
         const rawHash = window.location.hash || '';
-        let keyHex = rawHash.startsWith('#') ? rawHash.substring(1) : rawHash;
-        if (!/^[a-fA-F0-9]{64}$/.test(keyHex)) keyHex = '';
+        let keyStr = rawHash.startsWith('#') ? rawHash.substring(1) : rawHash;
+        // Accetta base64url (43 char, formato attuale) o hex (64 char, link legacy)
+        if (!/^[A-Za-z0-9_-]{43}$/.test(keyStr) && !/^[a-fA-F0-9]{64}$/.test(keyStr)) keyStr = '';
 
         if (viewPass) viewPass.focus();
 
@@ -296,7 +315,7 @@
             if (viewError) { viewError.textContent = msg; viewError.hidden = false; }
         }
 
-        // NB: il fragment con K_frag NON viene rimosso all'avvio: deve restare
+        // NB: il fragment con fragKey NON viene rimosso all'avvio: deve restare
         // nell'URL finche' lo sblocco non riesce, cosi' un reload dopo password
         // errata conserva la chiave e l'utente puo' ritentare (entro i 5 tentativi).
         // La rimozione avviene solo dopo decifratura riuscita (vedi sotto).
@@ -306,7 +325,7 @@
             if (viewError) viewError.hidden = true;
 
             if (!cryptoReady()) { showError(D.errCtx || 'Secure context required.'); return; }
-            if (!keyHex)        { showError(D.errKey || 'Invalid or missing key.'); return; }
+            if (!keyStr)        { showError(D.errKey || 'Invalid or missing key.'); return; }
             if (!unlockForm.reportValidity()) return;
 
             const submitBtn = unlockForm.querySelector('button[type="submit"]');
@@ -340,7 +359,7 @@
                 // Decifra localmente
                 let plaintext;
                 try {
-                    plaintext = await decryptSecret(keyHex, data.iv, data.ct);
+                    plaintext = await decryptSecret(keyStr, data.iv, data.ct);
                 } catch (err) {
                     // ct gia' consumato lato server: link corrotto/incompleto
                     showError(D.errDecrypt || 'Decryption failed.');
@@ -355,7 +374,7 @@
                 if (heading)      heading.hidden = true;
                 if (secretResult) secretResult.hidden = false;
 
-                // Sblocco riuscito: ora rimuovi K_frag dall'URL (history) cosi'
+                // Sblocco riuscito: ora rimuovi fragKey dall'URL (history) cosi'
                 // non resta nella barra indirizzi / cronologia dopo la lettura.
                 if (window.location.hash) {
                     try {
@@ -375,6 +394,6 @@
 
         // Avviso preventivo se il contesto non e' sicuro o la chiave manca
         if (!cryptoReady()) showError(D.errCtx || 'Secure context required.');
-        else if (!keyHex)   showError(D.errKey || 'Invalid or missing key.');
+        else if (!keyStr)   showError(D.errKey || 'Invalid or missing key.');
     }
 })();
