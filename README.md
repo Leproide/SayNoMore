@@ -4,9 +4,10 @@
 
 SayNoMore is a simple One Time Secret service for sharing passwords or sensitive information that can only be viewed once.
 
-> ### ⚠ BREAKING UPDATE — v6 (end-to-end encryption)
->
+> ### ⚠ BREAKING UPDATE (end-to-end encryption)
+> 
 > Since **v6**, encryption and decryption happen **entirely in the browser** (Web Crypto, AES-256-GCM). The server never sees the plaintext nor the AES key, in any phase. **Read before upgrading:**
+> 
 > - **Secrets created with previous versions become unreadable** (the on-disk format and the key scheme changed). Since secrets are ephemeral (max 30 days), do a clean cutover: empty the `data/` folder on deploy, or wait for old secrets to expire.
 > - **Creating and reading now require JavaScript and a secure context.** On clearnet you need **HTTPS**; on a `.onion` hidden service it works. On plain-HTTP clearnet, encryption is disabled with an explicit on-screen message — never a silent downgrade.
 > - **OpenSSL is no longer required on the server** for secret encryption (it moved to the browser); it is only used by the optional email notifications over SSL/STARTTLS.
@@ -27,7 +28,7 @@ SayNoMore is a simple One Time Secret service for sharing passwords or sensitive
 - 🧅 Tor support: links generated on `.onion` hidden services automatically use `http://` instead of `https://`
 - 💻 No database required, just the file system
 
-## 🚀 How it works (v6, end-to-end)
+## 🚀 How it works
 
 **Creating a secret**
 
@@ -119,19 +120,19 @@ information for an attacker.
 
 The main parameters are constants at the top of `index.php`, `view.php`, and `cleanup.php`:
 
-| Constant | File | Default | Description |
-|---|---|---|---|
-| `DEFAULT_TTL_DAYS` | index.php | 7 | Default validity in days for new secrets |
-| `MIN_TTL_DAYS` | index.php | 1 | Minimum TTL selectable by the user |
-| `MAX_TTL_DAYS` | index.php | 30 | Maximum TTL selectable by the user |
-| `MAX_SECRET_BYTES` | index.php | 65536 (64 KB) | Plaintext size limit (enforced client-side, re-checked server-side as `ciphertext − 16` GCM tag) |
-| `MAX_CT_B64_BYTES` | index.php | 98304 (96 KB) | Hard cap on the base64 ciphertext accepted by the server (bounds memory before decoding) |
-| `GCM_IV_LEN` | index.php | 12 | Expected GCM IV length in bytes (validated server-side) |
-| `MAX_ATTEMPTS` | view.php | 5 | Maximum number of password attempts before destruction |
-| `CLEANUP_ENABLED` | index.php / view.php | true | Master switch for in-request cleanup. Set to `false` to disable it entirely (useful when you run `cleanup.php` via cron) |
-| `CLEANUP_PROB_PCT` | index.php / view.php | 50 | Probability (%) of running a global cleanup on each request (ignored when `CLEANUP_ENABLED` is `false`) |
-| `TMP_ORPHAN_TTL` | all | 3600 | Orphan temporary files (failed writes) older than X seconds are removed |
-| `LEGACY_TTL_SEC` | all | 7 days | Fallback TTL for secrets created with previous versions (`created` field) |
+| Constant           | File                 | Default       | Description                                                                                                              |
+| ------------------ | -------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `DEFAULT_TTL_DAYS` | index.php            | 7             | Default validity in days for new secrets                                                                                 |
+| `MIN_TTL_DAYS`     | index.php            | 1             | Minimum TTL selectable by the user                                                                                       |
+| `MAX_TTL_DAYS`     | index.php            | 30            | Maximum TTL selectable by the user                                                                                       |
+| `MAX_SECRET_BYTES` | index.php            | 65536 (64 KB) | Plaintext size limit (enforced client-side, re-checked server-side as `ciphertext − 16` GCM tag)                         |
+| `MAX_CT_B64_BYTES` | index.php            | 98304 (96 KB) | Hard cap on the base64 ciphertext accepted by the server (bounds memory before decoding)                                 |
+| `GCM_IV_LEN`       | index.php            | 12            | Expected GCM IV length in bytes (validated server-side)                                                                  |
+| `MAX_ATTEMPTS`     | view.php             | 5             | Maximum number of password attempts before destruction                                                                   |
+| `CLEANUP_ENABLED`  | index.php / view.php | true          | Master switch for in-request cleanup. Set to `false` to disable it entirely (useful when you run `cleanup.php` via cron) |
+| `CLEANUP_PROB_PCT` | index.php / view.php | 50            | Probability (%) of running a global cleanup on each request (ignored when `CLEANUP_ENABLED` is `false`)                  |
+| `TMP_ORPHAN_TTL`   | all                  | 3600          | Orphan temporary files (failed writes) older than X seconds are removed                                                  |
+| `LEGACY_TTL_SEC`   | all                  | 7 days        | Fallback TTL for secrets created with previous versions (`created` field)                                                |
 
 ## 🌍 Internationalization
 
@@ -171,11 +172,11 @@ return [
 
 Common SMTP profiles:
 
-| Mode | Port | `secure` |
-|---|---|---|
-| SSL implicit | 465 | `'ssl'` |
-| STARTTLS (recommended) | 587 | `'tls'` |
-| Plaintext (internal only) | 25 | `''` |
+| Mode                      | Port | `secure` |
+| ------------------------- | ---- | -------- |
+| SSL implicit              | 465  | `'ssl'`  |
+| STARTTLS (recommended)    | 587  | `'tls'`  |
+| Plaintext (internal only) | 25   | `''`     |
 
 ### How it works
 
@@ -225,11 +226,13 @@ Cons: if traffic is very low, expired files may stay on disk longer than expecte
 The `cleanup.php` script is a standalone CLI job that guarantees cleanup. It is safe to run in parallel with web requests thanks to non-blocking locking (in-use files are skipped).
 
 **Manual test:**
+
 ```bash
 php /var/www/saynomore/cleanup.php
 ```
 
 Example output:
+
 ```
 [2025-01-20 03:15:02] SayNoMore cleanup:
   scanned:        42
@@ -241,16 +244,19 @@ Example output:
 ```
 
 **Crontab (every hour at :15):**
+
 ```cron
 15 * * * * /usr/bin/php /var/www/saynomore/cleanup.php >/dev/null 2>&1
 ```
 
 **Crontab (once a day at 3:15, fine for personal use):**
+
 ```cron
 15 3 * * * /usr/bin/php /var/www/saynomore/cleanup.php >/dev/null 2>&1
 ```
 
 **If you want to keep a cleanup log:**
+
 ```cron
 15 3 * * * /usr/bin/php /var/www/saynomore/cleanup.php >> /var/log/saynomore-cleanup.log 2>&1
 ```
@@ -346,8 +352,6 @@ This script is useful for monitoring secret lifecycle management and preventing 
 Write your secret, choose a password, set expiration, and generate the link  
 ![image](https://github.com/user-attachments/assets/ec9b9d69-1d1a-41cd-a053-4cb80a957e05)
 
-
-
 Copy the link using the Copy button, or manually if you prefer, and send it to the recipient  
 ![image](https://github.com/user-attachments/assets/45c0349c-c363-4a43-9ebb-aaccd258b4dc)
 
@@ -374,5 +378,5 @@ This project is distributed under the **GNU General Public License v2.0 (GPL-2.0
 
 ## Author
 
-Created by **Leproide** — <https://github.com/Leproide>
+Created by **Leproide**: <https://github.com/Leproide>
 Project: <https://github.com/Leproide/SayNoMore>
