@@ -1,7 +1,21 @@
 <?php
+/**
+ * SayNoMore - argon-check.php (shipped as argon-check.php.lock)
+ * Created by Leproide - https://github.com/Leproide/SayNoMore
+ *
+ * Distributed under GNU GPL v2.
+ * No warranty provided.
+ *
+ * Temporary diagnostic probe: rename to argon-check.php, open in the browser
+ * to verify the PHP runtime serving the app, then DELETE it immediately.
+ *
+ * Since v6 secret encryption runs in the browser (Web Crypto, AES-256-GCM):
+ *  - REQUIRED server-side: Argon2id (password hashing) + random_bytes (CSPRNG)
+ *  - OPTIONAL: OpenSSL, used only by the email notifications over SSL/STARTTLS
+ *  - AES-256-GCM is NOT used server-side anymore (verified in the browser).
+ */
 header('Content-Type: text/plain; charset=utf-8');
 echo 'PHP ', PHP_VERSION, ' (', PHP_SAPI, ")\n";
-echo 'Argon2id:     ', (defined('PASSWORD_ARGON2ID') ? 'OK' : 'MISSING'), "\n";
-echo 'OpenSSL:      ', (extension_loaded('openssl') ? 'OK' : 'MISSING'), "\n";
-echo 'AES-256-GCM:  ', (in_array('aes-256-gcm', openssl_get_cipher_methods(), true) ? 'OK' : 'MISSING'), "\n";
-echo 'random_bytes: ', (function_exists('random_bytes') ? 'OK' : 'MISSING'), "\n";
+echo 'Argon2id (required):      ', (defined('PASSWORD_ARGON2ID')      ? 'OK' : 'MISSING'), "\n";
+echo 'random_bytes (required):  ', (function_exists('random_bytes')  ? 'OK' : 'MISSING'), "\n";
+echo 'OpenSSL (email TLS only):  ', (extension_loaded('openssl')      ? 'OK' : 'absent (fine if you do not use email)'), "\n";
