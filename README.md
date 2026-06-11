@@ -362,7 +362,7 @@ Once opened and the password is entered, the recipient will see it like this
 
 ## ⚠ Warning
 
-Everything I publish exists because it was useful to me first. I'm not a software developer, and there may be even critical bugs even though all the code has been reviewed by multiple LLMs (Claude, GPT, DeepSeek) looking for vulnerabilities and should be clean.
+Everything I publish exists because it was useful to me first. I'm not a software developer, and there may be even critical bugs even though all the code has been reviewed by multiple LLMs (Claude Fable 5 + Opus 4.8 , GPT, DeepSeek) looking for vulnerabilities and should be clean.
 
 Use what I publish at your own risk, no warranty whatsoever.
 
