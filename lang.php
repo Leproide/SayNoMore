@@ -150,6 +150,9 @@ function snm_translations(): array {
             'err.wrong_pass'              => 'Password errata.',
             'err.notify_email_invalid'    => 'Email di notifica non valida.',
             'err.password_required'       => 'La password è obbligatoria.',
+            'err.decrypt_failed'          => 'Decifratura fallita: il link potrebbe essere corrotto o incompleto.',
+            'err.crypto_unavailable'      => 'Contesto sicuro richiesto: apri questa pagina via HTTPS o tramite un indirizzo .onion per abilitare la cifratura nel browser.',
+            'index.js_required'           => 'JavaScript è necessario per creare un segreto: la cifratura avviene nel tuo browser.',
 
             // Footer
             'footer.tagline'              => 'Made with &#x1F480; by Leprechaun',
@@ -212,6 +215,9 @@ function snm_translations(): array {
             'err.wrong_pass'              => 'Wrong password.',
             'err.notify_email_invalid'    => 'Invalid notification email.',
             'err.password_required'       => 'Password is required.',
+            'err.decrypt_failed'          => 'Decryption failed: the link may be corrupted or incomplete.',
+            'err.crypto_unavailable'      => 'Secure context required: open this page over HTTPS or via a .onion address to enable in-browser encryption.',
+            'index.js_required'           => 'JavaScript is required to create a secret: encryption happens in your browser.',
 
             // Footer
             'footer.tagline'              => 'Made with &#x1F480; by Leprechaun',

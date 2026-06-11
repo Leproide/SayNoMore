@@ -1,111 +1,106 @@
 # SayNoMore
 
-![c4b311a6-165e-437a-b2af-3d02f8bf007f](https://github.com/user-attachments/assets/7d2c6928-2344-41e8-ab6a-c9ae7ce6c8a3)
+#saynomore
 
 SayNoMore is a simple One Time Secret service for sharing passwords or sensitive information that can only be viewed once.
+
+> ### ⚠ BREAKING UPDATE — v6 (end-to-end encryption)
+>
+> Starting from **v6**, encryption and decryption happen **entirely in the browser** (Web Crypto, AES-256-GCM). The server never sees the plaintext nor the AES key, in any phase.
+>
+> **This is a breaking change. Read before upgrading:**
+> - **Secrets created with previous versions become unreadable.** The on-disk storage format and the key scheme changed. Since secrets are ephemeral (max 30 days), do a clean cutover: empty the `data/` folder on deploy, or wait for old secrets to expire.
+> - **Creating and reading now require JavaScript and a secure context.** On clearnet you need **HTTPS**; on a `.onion` hidden service it works (onion is a trusted context). On plain-HTTP clearnet, encryption is disabled with an explicit on-screen message — never a silent downgrade.
+> - **OpenSSL is no longer required on the server** for secret encryption (it moved to the browser). It is still used only by the optional email notifications when SSL/STARTTLS is selected.
+> - `cleanup.php`, `ExpireCheck.sh` and the email notifications are **unchanged and fully compatible** with the new format (they rely on the `expires`/`created` fields and on the secret filename, none of which changed).
 
 ## 🔐 Features
 
 - ✉️ Secrets readable only once, protected by a password (Argon2id hashing with automatic salt)
-- 🔒 AES-256-GCM encryption with authentication tag (detects ciphertext tampering)
-- 🧠 Real zero-knowledge: the decryption key travels in the URL fragment (`#`) and is never sent to the server through the link
+- 🔒 **End-to-end AES-256-GCM**: encryption/decryption run in the recipient's and sender's browser via the Web Crypto API. The server only ever stores and relays ciphertext.
+- 🧠 **True zero-knowledge on the content**: the AES key (`K_frag`) is generated in the browser, lives only in the URL fragment (`#`), and is **never** sent to the server — not in the link, not in any POST. The server cannot decrypt, even if fully compromised.
+- 🔑 **Password as a server-side access gate**: the view-password is verified server-side (Argon2id) to enforce the one-time read and the 5-attempt limit. It does **not** decrypt the content (that requires `K_frag`), so a stolen password alone is useless.
 - ⏳ User-configurable expiration: from 1 to 30 days (default 7)
 - 🧹 Automatic cleanup with non-blocking locking: expired secrets are removed in the background without interfering with active unlock attempts
 - 🧼 Destruction after read (with best-effort overwrite, see notes below)
-- 🛡 Anti-abuse mitigations: 64 KB secret size limit, max 5 password attempts, uniform timing against token enumeration, input type validation against malformed requests
+- 🛡 Anti-abuse mitigations: 64 KB secret size limit (enforced client- and server-side), max 5 password attempts, uniform timing against token enumeration, strict input/type validation against malformed requests
 - 🌍 Multilingual: Italian for Italian browsers, English everywhere else (based on `Accept-Language`)
-- 📬 Optional email notifications (off by default): when enabled in `mailconfig.php`, the creator can tick a checkbox to receive an email when the secret is opened or destroyed after too many failed attempts
-- 🧅 Tor support: links generated on `.onion` hidden services automatically use `http://` instead of `https://`
+- 🧅 Tor support: on `.onion` hidden services the generated link inherits `http://` automatically from the page address
 - 💻 No database required, just the file system
 
-## 🚀 How it works
+## 🚀 How it works (v6, end-to-end)
 
-1. Enter a message, choose a password, and select how many days the link should remain valid
-2. Get a link in the form `view.php?token=...#key`
-3. Send the link to the recipient
-4. The recipient opens the link, enters the password, and reads the secret
-5. The secret self-destructs after opening, after 5 failed attempts, or at the chosen expiration
+**Creating a secret**
 
-> The password is **mandatory**: trying to generate a link without one shows a localized popup ("La password è obbligatoria." / "Password is required.") attached to the field. Validation messages are shown in the **page language** (not the browser language) by overriding the native message via `setCustomValidity`. The secret and (when notifications are on) the email field use the same mechanism. The empty-password rule is also enforced **server-side**, so it holds even with JavaScript disabled or with crafted requests — no secret is ever created without a password.
+1. You enter a message, a password, and how many days the link stays valid.
+2. **In your browser**, JavaScript generates a random AES-256 key (`K_frag`) and a random IV, then encrypts the message (AES-256-GCM). Plaintext and `K_frag` never leave the browser.
+3. The browser sends to the server only: the IV, the ciphertext (with authentication tag), the password, and the TTL.
+4. The server hashes the password (Argon2id) and stores `{iv, ct, hash, expires, attempts}` — it does not encrypt anything and has no key.
+5. The browser builds the link `view.php?token=...#K_frag` (the server never knows `K_frag`).
+
+**Reading a secret**
+
+1. The recipient opens the link. JavaScript reads `K_frag` from the URL fragment. The fragment is kept until the secret is successfully unlocked (so a reload after a wrong password still lets you retry within the attempt budget), then removed from the address bar/history.
+2. The recipient enters the password. The browser sends to the server only the `token` and the `password` (never `K_frag`).
+3. The server verifies the password. On success it returns the stored IV + ciphertext **and destroys the file** (one-time). On wrong password it increments the counter; after 5 failures the secret is destroyed.
+4. The browser decrypts the ciphertext locally with `K_frag` and shows the secret. If `K_frag` is missing/corrupted, decryption fails client-side (the secret is already consumed).
 
 ## 🔗 Demo
 
-https://saynomore.muninn.ovh
+<https://saynomore.muninn.ovh>
 
 ## 🛠️ Requirements
 
+**Server**
 - PHP 7.4+ (8.x recommended)
-- OpenSSL extension enabled
 - Argon2id available (PHP built with libargon2, default on modern distros)
-- Web server with write permissions, the script will create a `data` folder
-- Protect the `data` directory from unauthorized read access (recommended, see the Security section).
-- HTTPS configured at the web server level (recommended, see security section)
-- JavaScript enabled on the client (required to read the key from the fragment)
+- `random_bytes` / `random_int` (CSPRNG)
+- Web server with write permissions; the script will create a `data` folder
+- Protect the `data` directory from unauthorized read access (recommended, see the Security section)
+- **HTTPS configured at the web server level** (required for clearnet, see Security section)
 - Local filesystem (ext4, xfs, btrfs, ntfs). On NFS/SMB file locking is not guaranteed.
+- OpenSSL is **not** required for secret encryption anymore (it now runs in the browser); it is only used by the optional email notifications over SSL/STARTTLS.
 
-## ✅ Verify PHP dependencies
-
-Before deploying, make sure the PHP runtime serving SayNoMore has all the
-required crypto primitives. Missing Argon2id or AES-256-GCM would cause
-silent failures: secrets get created but become **impossible to unlock**,
-even with the correct password.
-
-### One-line CLI check
-
-Run this from the same environment that serves the app:
-
-```bash
-php -r "echo 'Argon2id: ', (defined('PASSWORD_ARGON2ID') ? 'OK' : 'MISSING'), PHP_EOL, 'OpenSSL: ', (extension_loaded('openssl') ? 'OK' : 'MISSING'), PHP_EOL, 'AES-256-GCM: ', (in_array('aes-256-gcm', openssl_get_cipher_methods(), true) ? 'OK' : 'MISSING'), PHP_EOL, 'random_bytes: ', (function_exists('random_bytes') ? 'OK' : 'MISSING'), PHP_EOL;"
-```
-
-Expected output:
-
-```
-Argon2id: OK
-OpenSSL: OK
-AES-256-GCM: OK
-random_bytes: OK
-```
-
-If any line says `MISSING`, **do not deploy**: rebuild PHP with the missing
-support, or switch to a modern distro package.
-(`php:8.x`), where all four are present by default.
-
-### Browser-side check (recommended)
-
-The CLI `php` binary may differ from the one serving HTTP requests.
-To test the **exact** PHP that will run SayNoMore, the repo ships a
-ready-made probe file. Rename it to activate it:
-
-```bash
-mv argon-check.php.lock argon-check.php
-```
-
-Open `https://your-domain/argon-check.php` in a browser, read the output,
-then **delete the file immediately**:
-
-```bash
-rm argon-check.php
-```
-
-Leaving it online would expose your PHP version and capabilities, useful
-information for an attacker.
+**Client (browser)**
+- JavaScript enabled (required to encrypt on creation and to read the key on viewing)
+- Web Crypto API (`crypto.subtle`) — available in any modern browser
+- **Secure context**: HTTPS, `localhost`, or a `.onion` address. On plain-HTTP clearnet the app refuses to encrypt/decrypt and shows a message.
 
 ## ⚙️ Configuration
 
 The main parameters are constants at the top of `index.php`, `view.php`, and `cleanup.php`:
 
-| Constant | File | Default | Description |
-|---|---|---|---|
-| `DEFAULT_TTL_DAYS` | index.php | 7 | Default validity in days for new secrets |
-| `MIN_TTL_DAYS` | index.php | 1 | Minimum TTL selectable by the user |
-| `MAX_TTL_DAYS` | index.php | 30 | Maximum TTL selectable by the user |
-| `MAX_SECRET_BYTES` | index.php | 65536 (64 KB) | Secret size limit |
-| `MAX_ATTEMPTS` | view.php | 5 | Maximum number of password attempts before destruction |
-| `CLEANUP_ENABLED` | index.php / view.php | true | Master switch for in-request cleanup. Set to `false` to disable it entirely (useful when you run `cleanup.php` via cron) |
-| `CLEANUP_PROB_PCT` | index.php / view.php | 50 | Probability (%) of running a global cleanup on each request (ignored when `CLEANUP_ENABLED` is `false`) |
-| `TMP_ORPHAN_TTL` | all | 3600 | Orphan temporary files (failed writes) older than X seconds are removed |
-| `LEGACY_TTL_SEC` | all | 7 days | Fallback TTL for secrets created with previous versions (`created` field) |
+| Constant            | File                 | Default        | Description                                                                                                              |
+| ------------------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `DEFAULT_TTL_DAYS`  | index.php            | 7              | Default validity in days for new secrets                                                                                 |
+| `MIN_TTL_DAYS`      | index.php            | 1              | Minimum TTL selectable by the user                                                                                       |
+| `MAX_TTL_DAYS`      | index.php            | 30             | Maximum TTL selectable by the user                                                                                       |
+| `MAX_SECRET_BYTES`  | index.php            | 65536 (64 KB)  | Plaintext size limit (enforced client-side and re-checked server-side as `ciphertext − 16` byte GCM tag)                |
+| `MAX_CT_B64_BYTES`  | index.php            | 98304 (96 KB)  | Hard cap on the base64 ciphertext accepted by the server (bounds memory before decoding)                                |
+| `GCM_IV_LEN`        | index.php            | 12             | Expected GCM IV length in bytes (validated server-side)                                                                  |
+| `MAX_ATTEMPTS`      | view.php             | 5              | Maximum number of password attempts before destruction                                                                   |
+| `CLEANUP_ENABLED`   | index.php / view.php | true           | Master switch for in-request cleanup. Set to `false` to disable it entirely (useful when you run `cleanup.php` via cron) |
+| `CLEANUP_PROB_PCT`  | index.php / view.php | 50             | Probability (%) of running a global cleanup on each request (ignored when `CLEANUP_ENABLED` is `false`)                  |
+| `TMP_ORPHAN_TTL`    | all                  | 3600           | Orphan temporary files (failed writes) older than X seconds are removed                                                  |
+| `LEGACY_TTL_SEC`    | all                  | 7 days         | Fallback TTL for secrets created with previous versions (`created` field)                                                |
+
+### Storage format (on disk, in `data/`)
+
+Each secret is a JSON file named with a 32-hex token:
+
+```json
+{
+  "iv": "<base64 12-byte IV>",
+  "ct": "<base64 ciphertext+GCM-tag, produced by the browser>",
+  "hash": "<Argon2id hash of the view-password>",
+  "expires": 1700000000,
+  "attempts": 0,
+  "notify_email": "",
+  "lang": "en"
+}
+```
+
+Note: there is no separate `tag` field anymore — the 16-byte GCM tag is appended to `ct` (Web Crypto convention). `notify_email` and `lang` are metadata and are **not** encrypted (see Security notes).
 
 ## 🌍 Internationalization
 
@@ -114,78 +109,11 @@ The interface language is automatically selected based on the browser's `Accept-
 - Italian browsers (`it`, `it-IT`, ...) → Italian interface
 - All other languages → English interface (default fallback)
 
-All UI strings live in `lang.php`, which contains a translation table for both languages. To add a new language: add a new entry to the array returned by `snm_translations()` and update the language detection in `snm_lang()`.
-
-CLI output (`cleanup.php`) is always in English, since the script is intended for system administrators.
-
-## 📬 Email notifications (optional)
-
-SayNoMore can optionally email the secret creator when the secret is read or destroyed after too many failed password attempts. The feature is **off by default** and is configured entirely in `mailconfig.php`.
-
-### Enable
-
-Edit `mailconfig.php` and set `enabled` to `true`, then fill in your SMTP credentials:
-
-```php
-return [
-    'enabled'   => true,
-    'host'      => 'smtp.example.com',
-    'port'      => 587,
-    'secure'    => 'tls',                // 'ssl' | 'tls' | ''
-    'username'  => 'noreply@example.com',
-    'password'  => 'your-smtp-password',
-    'from'      => 'noreply@example.com',
-    'from_name' => 'SayNoMore',
-    'site_url'  => 'https://your-site.example',  // optional: turns "SayNoMore" in the email footer into a link
-    'max_retries' => 3,                  // SMTP send attempts before giving up
-    'debug'     => false,                // true = log to maildebug.txt + red warning on home (keep off in production)
-    'timeout'   => 10,
-];
-```
-
-Common SMTP profiles:
-
-| Mode | Port | `secure` |
-|---|---|---|
-| SSL implicit | 465 | `'ssl'` |
-| STARTTLS (recommended) | 587 | `'tls'` |
-| Plaintext (internal only) | 25 | `''` |
-
-### How it works
-
-- When `enabled` is `true`, a **checkbox** ("Email me when the secret is read or destroyed") appears in the secret creation form; the **email field** is shown only after the checkbox is ticked
-- While the checkbox is ticked the email field becomes required: leaving it empty or typing an invalid address shows a localized popup (in the page language); the address is also re-validated server-side
-- If the user ticks the checkbox, the address is validated and stored inside the secret payload along with the language chosen at creation time
-- Two notifications can be triggered:
-  - **Secret read**: sent right after the recipient successfully decrypts the secret
-  - **Secret destroyed**: sent right after the secret is deleted following the maximum number of failed password attempts
-- The notification is localized in the same language as the creator's UI (Italian or English)
-- The email contains a short ID (first 8 characters of the token) plus date and time
-- When `enabled` is `false` the checkbox is **not shown** and the application behaves exactly as before
-
-### Implementation notes
-
-- The SMTP client is implemented natively (no PHPMailer, no Composer dependency); see `mail.php`
-- Supports `AUTH LOGIN`, multipart/alternative bodies (plaintext + HTML), STARTTLS and SSL
-- **Send retries**: the notification is attempted up to `max_retries` times (default 3). Delivery is confirmed by the SMTP `250` reply after the `DATA` block, so the send stops on the first accepted attempt and a delivered message is **never sent more than once**. Retries only occur when a previous attempt failed before that confirmation, with a short back-off between attempts
-- **Email footer link**: the footer reads "Automatic notification generated by SayNoMore"; if `site_url` is set to a valid `http(s)` URL, the word "SayNoMore" becomes a clickable link to that address (otherwise it stays plain text)
-- The mail is sent in background after the response is delivered to the client (`register_shutdown_function` + `fastcgi_finish_request` when available), so retries and SMTP timeouts never delay the page shown to the user
-- Failures are silent for the end user: SMTP errors only get logged via `error_log()` so that a misconfigured SMTP server never breaks the secret read flow
-- The notification email is stored in clear text inside the secret file; protect the `data/` directory just like for the secret payload itself (see the Security section)
-
-### Debug logging
-
-To diagnose why a notification is or isn't being delivered, set `'debug' => true` in `mailconfig.php`. When enabled:
-
-- Every step of the pipeline is appended to **`maildebug.txt`** (created in the same folder as `mail.php`): message generation (subject, body sizes, footer link), the full SMTP conversation (`>>` commands sent / `<<` server replies), the **raw RFC message** (headers + body, so you can inspect format and spacing), and the outcome of each retry attempt
-- A **red warning banner** is shown on the home page (Italian or English, via `lang.php`) so it is obvious the log is active
-- SMTP credentials are **never** written to the log: the `AUTH LOGIN` username/password lines are replaced with `<username base64>` / `<password base64 redacted>`
-
-> ⚠ `maildebug.txt` can contain recipient addresses and message content. It lives inside the document root, so **protect it like the `data/` directory** (deny web access) and keep `debug` **off in production** — turn it on only while troubleshooting.
+All UI strings live in `lang.php`, which contains a translation table for both languages. To add a new language: add a new entry to the array returned by `snm_translations()` and update the language detection in `snm_lang()`. CLI output (`cleanup.php`) is always in English, since the script is intended for system administrators.
 
 ## 🧹 Expired secret cleanup
 
-Two complementary mechanisms are available; you can use one or both together.
+Two complementary mechanisms are available; you can use one or both together. Both are unchanged in v6 and fully compatible with the new format.
 
 ### 1. Probabilistic in-request cleanup (enabled by default)
 
@@ -196,14 +124,16 @@ Cons: if traffic is very low, expired files may stay on disk longer than expecte
 
 ### 2. Cron-based cleanup (optional, recommended for low-traffic services)
 
-The `cleanup.php` script is a standalone CLI job that guarantees cleanup. It is safe to run in parallel with web requests thanks to non-blocking locking (in-use files are skipped).
+The `cleanup.php` script is a standalone CLI job that guarantees cleanup. It is safe to run in parallel with web requests thanks to non-blocking locking (in-use files are skipped). It keys solely on the `expires`/`created` fields, so it works identically with v6 storage.
 
 **Manual test:**
-```bash
+
+```
 php /var/www/saynomore/cleanup.php
 ```
 
 Example output:
+
 ```
 [2025-01-20 03:15:02] SayNoMore cleanup:
   scanned:        42
@@ -215,98 +145,96 @@ Example output:
 ```
 
 **Crontab (every hour at :15):**
-```cron
+
+```
 15 * * * * /usr/bin/php /var/www/saynomore/cleanup.php >/dev/null 2>&1
 ```
 
 **Crontab (once a day at 3:15, fine for personal use):**
-```cron
-15 3 * * * /usr/bin/php /var/www/saynomore/cleanup.php >/dev/null 2>&1
-```
 
-**If you want to keep a cleanup log:**
-```cron
-15 3 * * * /usr/bin/php /var/www/saynomore/cleanup.php >> /var/log/saynomore-cleanup.log 2>&1
+```
+15 3 * * * /usr/bin/php /var/www/saynomore/cleanup.php >/dev/null 2>&1
 ```
 
 The script refuses to run if invoked over the web (it checks `PHP_SAPI`), so even if the file were accidentally reachable from a browser it couldn't be abused.
 
-If you enable the cron, you can disable the in-request probabilistic cleanup by setting `CLEANUP_ENABLED` to `false` in both `index.php` and `view.php`. This avoids the small per-request I/O overhead of the random check and leaves cleanup entirely to the cron job.
+If you enable the cron, you can disable the in-request probabilistic cleanup by setting `CLEANUP_ENABLED` to `false` in both `index.php` and `view.php`:
 
-```php
+```
 const CLEANUP_ENABLED = false;
 ```
 
 ## 🔒 Important security notes
 
-**Key in the URL fragment.** The AES key sits after the `#`, so it doesn't end up in Apache/nginx logs, in referer headers, in the link-preview systems of Slack/WhatsApp/Telegram, or in proxy/CDN/WAF logs. It only remains in the recipient's browser history until unlock, after which it is automatically removed via `history.replaceState`.
+**End-to-end encryption (v6).** The AES key `K_frag` is generated in the browser and used only in the browser. It is placed after the `#` in the link and is therefore never sent to the server — not in the original link (fragments are not transmitted in HTTP requests), and **not in the unlock POST either** (the browser sends only `token` + `password`; the server returns the ciphertext, which the browser decrypts locally). Consequence: a compromised or malicious server — at rest or actively in the request path — sees `iv`, `ct`, the Argon2id hash, and the password, but **never `K_frag`**, and therefore cannot decrypt the secret.
 
-**Protect the `data/` folder.** The script creates `data/` inside the document root. It is **strongly recommended** to block its web access (`.htaccess` with `Deny from all` on Apache, or a `location` deny rule on nginx), or to move it outside the document root by editing `$storage` in `index.php`, `view.php`, and `cleanup.php`.
+**Password is an access gate, not a content key.** The view-password is verified server-side to enforce the one-time read and the 5-attempt limit. Because the ciphertext is released only after a correct password, an attacker who has the link but not the password cannot brute-force the blob offline. A correct password alone still cannot decrypt anything without `K_frag`. Residual, stated honestly: the password does transit to the server (it is the gate); use a password you do not reuse elsewhere.
+
+**Secure context required.** Web Crypto's `crypto.subtle` only works in a secure context. On clearnet this means HTTPS; `.onion` services qualify as trusted contexts. On plain-HTTP clearnet the app disables encryption/decryption and shows a clear message instead of silently weakening security.
+
+**Protect the `data/` folder.** The script creates `data/` inside the document root. It is **strongly recommended** to block its web access (`.htaccess` with `Require all denied` on Apache, or a `location` deny rule on nginx), or to move it outside the document root by editing `$storage` in `index.php`, `view.php`, and `cleanup.php`. Note that even if `data/` is read by an attacker, the secrets remain confidential (no `K_frag` is stored), but the `notify_email` metadata is stored in clear and would be exposed — do not rely on `data/` exposure being harmless.
 
 ### Apache
 
 Create a `.htaccess` file inside `data/`:
 
-```apache
+```
 Require all denied
 ```
 
-If you are using an older Apache version:
+Older Apache:
 
-```apache
+```
 Deny from all
 ```
 
 ### Nginx
 
-Add a rule to block direct access to `data/`:
-
-```nginx
+```
 location ^~ /data/ {
     deny all;
     return 403;
 }
 ```
 
-**Force HTTPS.** The script does not force HTTPS because that is assumed to be handled by the web server. Without HTTPS, passwords and keys travel in clear text. Exception: `.onion` hidden services over Tor, where the link is generated with `http://` because anonymity and encryption are already provided by the Tor protocol.
+It is also recommended to deny web access to `mailconfig.php` (SMTP credentials), `maildebug.txt` (if debug is ever enabled), and any `*.php.lock` diagnostic files, or to move credentials/logs outside the document root.
 
-**"Secure delete" overwrite is best-effort.** On journaled filesystems (ext4, NTFS, APFS, XFS), on SSDs with wear leveling, and on setups with backups/snapshots, overwriting with zeros does not guarantee data unrecoverability. For serious at-rest protection, use an encrypted filesystem.
+**Force HTTPS.** The script does not force HTTPS itself; that is assumed to be handled by the web server. On clearnet, without HTTPS the browser cannot encrypt (no secure context) and passwords would travel in clear. Exception: `.onion` hidden services over Tor, where anonymity and encryption are already provided by the Tor protocol and the link inherits `http://`.
 
-**Timing attack against token enumeration.** To prevent an attacker from distinguishing "existing token" from "non-existing token" by measuring response times, every POST request performs a password verification (real or dummy) so the same time is consumed in both cases.
+**"Secure delete" overwrite is best-effort.** On journaled filesystems (ext4, NTFS, APFS, XFS), on SSDs with wear leveling, and on setups with backups/snapshots, overwriting with zeros does not guarantee data unrecoverability. For serious at-rest protection, use an encrypted filesystem. (This is moot for the plaintext, which never touches the server, but still applies to the ciphertext file.)
 
-**Input type validation.** All HTTP inputs (both GET and POST) are validated as strings before processing, to avoid TypeError 500 errors and noisy logs caused by bots forging requests with array-typed parameters (`?token[]=...`).
+**Timing attack against token enumeration.** Every unlock POST performs a password verification (real or a pre-computed dummy hash) so that existing and non-existing tokens consume comparable time. Missing, corrupted, and expired tokens all return the same response (HTTP 404, identical message), avoiding a status/message oracle. Token enumeration is infeasible regardless (128-bit random tokens).
 
-**Cleanup vs. unlock race condition.** Global cleanup (both in-request and via cron) uses `flock LOCK_EX | LOCK_NB` on every file before reading it. If a file is in use (because another request is updating the attempts counter or decrypting the secret), it is silently skipped and will be handled on a later pass. This prevents cleanup running during a legitimate unlock attempt from destroying the secret prematurely.
+**Input type validation.** All HTTP inputs (GET and POST) are validated as strings before processing; `iv`/`ct` are strictly base64-decoded and length-checked; the token is matched against `^[a-f0-9]{32}$` (anti path-traversal). This avoids TypeError 500s and noisy logs from bots forging array-typed parameters (`?token[]=...`).
+
+**Cleanup vs. unlock race condition.** Global cleanup (in-request and cron) uses `flock LOCK_EX | LOCK_NB` on every file before reading it. Files in use are silently skipped and handled on a later pass, so cleanup never destroys a secret during a legitimate unlock.
 
 # Secret Expiration Check
 
-The `ExpireCheck.sh` script allows you to verify the status of your secrets and quickly identify potential issues.
+The `ExpireCheck.sh` script verifies the status of your secrets and quickly identifies potential issues. It is unchanged in v6 and reads the `expires` field directly.
 
-It provides the following checks:
+It reports:
 
 - Expired secrets
 - Secrets expiring within the next 24 hours
 - Secrets still valid for more than 24 hours
 - Misconfigured or broken secrets without an expiration date
 
-This script is useful for monitoring secret lifecycle management and preventing unexpected authentication or service failures caused by expired credentials.
+```
+bash ExpireCheck.sh /var/www/saynomore/data
+```
 
-![image](https://github.com/user-attachments/assets/716c7f59-8b79-49e3-8461-aac097d4042d)
+# Threat model (quick reference)
 
-# Screenshots
+| Adversary                                   | Outcome                                                                                  |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Server compromised at rest (`data/` read)   | Sees `iv`, `ct`, Argon2id hash, `notify_email`. **Cannot decrypt** (no `K_frag`).        |
+| Malicious/MITM server in the request path   | Sees the password (gate). **Never receives `K_frag`** → cannot decrypt.                  |
+| Has the link, not the password              | Blocked by the server-side 5-attempt gate; ciphertext never released.                    |
+| Has the password, not the link (`K_frag`)   | Server releases the ciphertext (and consumes it), but it cannot be decrypted.            |
+| Network observer (HTTPS)                     | Sees only TLS-encrypted traffic.                                                         |
 
-Write your secret, choose a password, set expiration, and generate the link  
-![image](https://github.com/user-attachments/assets/ec9b9d69-1d1a-41cd-a053-4cb80a957e05)
-
-
-
-Copy the link using the Copy button, or manually if you prefer, and send it to the recipient  
-![image](https://github.com/user-attachments/assets/45c0349c-c363-4a43-9ebb-aaccd258b4dc)
-
-Once opened and the password is entered, the recipient will see it like this  
-![image](https://github.com/user-attachments/assets/aecc3ef9-1e70-42eb-8f07-bbb1b990caff)
-
-![image](https://github.com/user-attachments/assets/87ba51f1-c9fb-40f6-bd3d-3953dc6dd197)
+Not covered by design: a malicious server could serve tampered JavaScript to exfiltrate the plaintext/key in the victim's browser. This is inherent to any browser-delivered E2E web app; mitigate with HTTPS, integrity controls, and trusting the operator/host.
 
 ## ⚠ Warning
 
@@ -317,5 +245,13 @@ Use what I publish at your own risk, no warranty whatsoever.
 ## Fonts
 
 This project uses **Chakra Petch**.
-Font by cadsondemak, licensed under the **SIL Open Font License 1.1 (OFL-1.1)**.
-https://github.com/cadsondemak/Chakra-Petch
+Font by cadsondemak, licensed under the **SIL Open Font License 1.1 (OFL-1.1)**. <https://github.com/cadsondemak/Chakra-Petch>
+
+## License
+
+This project is distributed under the **GNU General Public License v2.0 (GPL-2.0)**. See the `LICENSE` file for the full text. The bundled font is licensed separately under **OFL-1.1** (see `Font_License.md`).
+
+## Author
+
+Created by **Leproide** — <https://github.com/Leproide>
+Project: <https://github.com/Leproide/SayNoMore>

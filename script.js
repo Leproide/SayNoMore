@@ -1,48 +1,109 @@
 /**
  * SayNoMore - script.js
+ * Created by Leproide - https://github.com/Leproide/SayNoMore
  *
- * Responsabilita':
- *  - index.php: focus textarea + copia link
- *  - view.php : legge la chiave AES dal fragment URL e la trasferisce nel
- *               campo hidden del form (la chiave non transita mai via GET)
- *  - view.php (success): copia il segreto negli appunti
+ * Distributed under GNU GPL v2.
+ * No warranty provided.
  *
- * Patch notes v5.x:
- *  - Funzione snmCopyText() standalone con triplo fallback per garantire
- *    la copia anche su browser/contesti dove navigator.clipboard fallisce
- *    silenziosamente (es. HTTP non-secure, permission policy)
- *  - Le label dei bottoni vengono lette da data-* attributes lato HTML
+ * Patch notes v6 (E2E):
+ *  - index.php: la cifratura AES-256-GCM avviene QUI (Web Crypto). Il browser
+ *    genera K_frag + IV, cifra il plaintext e invia al server solo iv + ct.
+ *    Il link (con K_frag nel fragment) viene costruito lato client.
+ *  - view.php : invia solo token + password; a password corretta il server
+ *    restituisce iv + ct e il browser decifra localmente con K_frag.
+ *  - K_frag non lascia MAI il browser in chiaro verso il server.
+ *  - Richiede secure context (HTTPS o .onion): senza crypto.subtle l'E2E e'
+ *    disabilitato con messaggio esplicito.
  */
 
 (function () {
     'use strict';
 
-    /**
-     * Copia testo negli appunti con triplo fallback:
-     *   1) navigator.clipboard.writeText (moderno, richiede HTTPS o localhost)
-     *   2) execCommand('copy') su una textarea OFF-SCREEN appena creata
-     *      (sempre permesso, non dipende dal readonly del DOM esistente)
-     *   3) ritorna false in caso di fallimento totale
-     *
-     * @param {string} text - testo da copiare
-     * @returns {Promise<boolean>} true se copiato, false altrimenti
-     */
-    async function snmCopyText(text) {
-        // Tentativo 1: API moderna
-        if (navigator.clipboard && window.isSecureContext) {
-            try {
-                await navigator.clipboard.writeText(text);
-                return true;
-            } catch (e) {
-                // cade nel fallback sotto
-            }
-        }
+    // ---------------------------------------------------------------- utils
 
-        // Tentativo 2: textarea off-screen + execCommand('copy')
-        // Creiamo un elemento nuovo invece di usare quello del segreto:
-        // - non dobbiamo togliere readonly al textarea originale
-        // - select() funziona sempre su una textarea pulita
-        // - styling off-screen per non far saltare il layout o lo scroll
+    /** crypto.subtle disponibile solo in secure context (HTTPS / .onion). */
+    function cryptoReady() {
+        return !!(window.crypto && window.crypto.subtle && window.isSecureContext);
+    }
+
+    function bytesToHex(bytes) {
+        let out = '';
+        for (let i = 0; i < bytes.length; i++) {
+            out += bytes[i].toString(16).padStart(2, '0');
+        }
+        return out;
+    }
+
+    function hexToBytes(hex) {
+        const len = hex.length / 2;
+        const out = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            out[i] = parseInt(hex.substr(i * 2, 2), 16);
+        }
+        return out;
+    }
+
+    function bytesToB64(bytes) {
+        let bin = '';
+        const chunk = 0x8000; // evita stack overflow su input grandi
+        for (let i = 0; i < bytes.length; i += chunk) {
+            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        return btoa(bin);
+    }
+
+    function b64ToBytes(b64) {
+        const bin = atob(b64);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+    }
+
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+
+    /** Importa K_frag (32 byte) come chiave AES-GCM. */
+    async function importKey(keyBytes, usages) {
+        return window.crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, usages);
+    }
+
+    /**
+     * Cifra plaintext con una chiave random fresca.
+     * @returns {Promise<{keyHex:string, ivB64:string, ctB64:string}>}
+     */
+    async function encryptSecret(plaintext) {
+        const keyBytes = window.crypto.getRandomValues(new Uint8Array(32)); // AES-256
+        const iv       = window.crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV
+        const key      = await importKey(keyBytes, ['encrypt']);
+        const ctBuf    = await window.crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: iv, tagLength: 128 },
+            key,
+            enc.encode(plaintext)
+        );
+        return {
+            keyHex: bytesToHex(keyBytes),          // -> fragment
+            ivB64:  bytesToB64(iv),                // -> server
+            ctB64:  bytesToB64(new Uint8Array(ctBuf)) // ct+tag -> server
+        };
+    }
+
+    /** Decifra ct (ct+tag) con K_frag (hex). Lancia su fallimento (tag errato). */
+    async function decryptSecret(keyHex, ivB64, ctB64) {
+        const key = await importKey(hexToBytes(keyHex), ['decrypt']);
+        const ptBuf = await window.crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: b64ToBytes(ivB64), tagLength: 128 },
+            key,
+            b64ToBytes(ctB64)
+        );
+        return dec.decode(ptBuf);
+    }
+
+    // ------------------------------------------------------ copy-to-clipboard
+
+    async function snmCopyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+        }
         try {
             const tmp = document.createElement('textarea');
             tmp.value = text;
@@ -61,7 +122,7 @@
             document.body.appendChild(tmp);
             tmp.focus();
             tmp.select();
-            tmp.setSelectionRange(0, text.length); // necessario su iOS
+            tmp.setSelectionRange(0, text.length); // iOS
             const ok = document.execCommand('copy');
             document.body.removeChild(tmp);
             return !!ok;
@@ -70,124 +131,250 @@
         }
     }
 
-    /**
-     * Attacca a un bottone il comportamento "copia X negli appunti", con
-     * cambio etichetta successo/errore e ripristino dopo timeout.
-     *
-     * @param {HTMLElement} btn - il bottone
-     * @param {function():string} getText - callback che fornisce il testo da copiare
-     * @param {number} resetMs - dopo quanti ms ripristinare l'etichetta default
-     */
     function attachCopyButton(btn, getText, resetMs) {
         if (!btn) return;
         const labelDefault = btn.dataset.labelDefault || 'Copy';
         const labelSuccess = btn.dataset.labelSuccess || 'Copied!';
         const labelError   = btn.dataset.labelError   || 'Error';
-
         btn.addEventListener('click', async function (e) {
             e.preventDefault();
             const ok = await snmCopyText(getText());
             btn.textContent = ok ? labelSuccess : labelError;
-            setTimeout(function () {
-                btn.textContent = labelDefault;
-            }, resetMs);
+            setTimeout(function () { btn.textContent = labelDefault; }, resetMs);
         });
     }
 
-    // -------- index.php : focus textarea --------
-    const taSecret = document.querySelector('textarea[name="secret"]');
-    if (taSecret) taSecret.focus();
+    // ============================================================== index.php
 
-    // -------- index.php : bottone Copia link --------
-    const copyBtn = document.getElementById('copyBtn');
-    const linkInput = document.getElementById('secretLink');
-    if (copyBtn && linkInput) {
-        attachCopyButton(copyBtn, function () { return linkInput.value; }, 2000);
-    }
+    const snmForm = document.getElementById('snmForm');
+    if (snmForm) {
+        const secretField = document.getElementById('secretField');
+        const passField   = document.getElementById('passField');
+        const formError   = document.getElementById('formError');
+        const ctxWarn     = document.getElementById('ctxWarn');
+        const resultBox   = document.getElementById('resultBox');
+        const secretLink  = document.getElementById('secretLink');
+        const expiry      = document.getElementById('expiry_days');
+        const notifyCb    = document.getElementById('notify_enabled');
+        const notifyEmail = document.getElementById('notify_email');
 
-    // -------- index.php : campo email notifiche visibile solo se checkbox ON --------
-    // La checkbox sta sopra il campo email; il campo compare solo quando la
-    // checkbox e' spuntata. sync() viene chiamata anche all'avvio per allineare
-    // lo stato a un eventuale re-render server-side (es. dopo errore di
-    // validazione) in cui la checkbox risulta gia' flaggata.
-    // Quando la checkbox e' ON il campo diventa "required" (cosi' compare il
-    // popup nativo localizzato se vuoto/non valido); quando e' OFF il campo
-    // viene disabilitato, cosi' un eventuale valore non valido rimasto non
-    // blocca invisibilmente il submit (un campo hidden resterebbe comunque
-    // soggetto a validazione del formato email).
-    const notifyCb    = document.getElementById('notify_enabled');
-    const notifyWrap  = document.getElementById('notifyEmailWrap');
-    const notifyEmail = document.getElementById('notify_email');
-    if (notifyCb && notifyWrap) {
-        const sync = function () {
-            const on = notifyCb.checked;
-            notifyWrap.hidden = !on;
-            if (notifyEmail) {
-                notifyEmail.disabled = !on;
-                notifyEmail.required = on;
-                if (!on) notifyEmail.setCustomValidity('');
+        if (secretField) secretField.focus();
+
+        // Secure context obbligatorio per cifrare nel browser.
+        if (!cryptoReady() && ctxWarn) {
+            ctxWarn.textContent = ctxWarn.dataset.insecureMsg || 'Secure context required.';
+            ctxWarn.hidden = false;
+            const submitBtn = snmForm.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+        }
+
+        // Toggle campo email notifiche (visibile solo se checkbox ON)
+        const notifyWrap = document.getElementById('notifyEmailWrap');
+        if (notifyCb && notifyWrap) {
+            const sync = function () {
+                const on = notifyCb.checked;
+                notifyWrap.hidden = !on;
+                if (notifyEmail) {
+                    notifyEmail.disabled = !on;
+                    notifyEmail.required = on;
+                    if (!on) notifyEmail.setCustomValidity('');
+                }
+            };
+            notifyCb.addEventListener('change', sync);
+            sync();
+        }
+
+        // Messaggi di validazione nativi localizzati
+        const reqFields = snmForm.querySelectorAll('[data-required-msg], [data-invalid-msg]');
+        reqFields.forEach(function (field) {
+            field.addEventListener('invalid', function () {
+                if (field.validity.valueMissing && field.dataset.requiredMsg) {
+                    field.setCustomValidity(field.dataset.requiredMsg);
+                } else if (field.validity.typeMismatch && field.dataset.invalidMsg) {
+                    field.setCustomValidity(field.dataset.invalidMsg);
+                } else {
+                    field.setCustomValidity('');
+                }
+            });
+            field.addEventListener('input', function () { field.setCustomValidity(''); });
+        });
+
+        snmForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            if (formError) formError.hidden = true;
+
+            if (!cryptoReady()) {
+                if (ctxWarn) {
+                    ctxWarn.textContent = ctxWarn.dataset.insecureMsg || 'Secure context required.';
+                    ctxWarn.hidden = false;
+                }
+                return;
             }
-        };
-        notifyCb.addEventListener('change', sync);
-        sync();
-    }
+            if (!snmForm.reportValidity()) return;
 
-    // -------- index.php : messaggi di validazione localizzati --------
-    // Il messaggio nativo del browser (es. "compila questo campo") segue la
-    // lingua del BROWSER, non quella della pagina. Per i campi con
-    // data-required-msg / data-invalid-msg (textarea segreto, password, email)
-    // sostituiamo quel messaggio con la stringa tradotta da lang.php, coerente
-    // con la lingua della pagina:
-    //   - valueMissing (campo vuoto)   -> data-required-msg
-    //   - typeMismatch (es. email mal formattata) -> data-invalid-msg
-    // Il messaggio va impostato solo nell'evento invalid e azzerato appena
-    // l'utente digita, altrimenti il campo resterebbe sempre invalido.
-    const reqFields = document.querySelectorAll('#snmForm [data-required-msg], #snmForm [data-invalid-msg]');
-    reqFields.forEach(function (field) {
-        field.addEventListener('invalid', function () {
-            if (field.validity.valueMissing && field.dataset.requiredMsg) {
-                field.setCustomValidity(field.dataset.requiredMsg);
-            } else if (field.validity.typeMismatch && field.dataset.invalidMsg) {
-                field.setCustomValidity(field.dataset.invalidMsg);
-            } else {
-                field.setCustomValidity('');
+            const submitBtn = snmForm.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            try {
+                // 1) Cifra nel browser
+                const out = await encryptSecret(secretField.value);
+
+                // 2) Invia solo iv + ct + password + TTL (+ notifiche opzionali)
+                const body = new URLSearchParams();
+                body.set('iv', out.ivB64);
+                body.set('ct', out.ctB64);
+                body.set('passphrase', passField.value);
+                body.set('expiry_days', expiry ? expiry.value : '7');
+                if (notifyCb && notifyCb.checked) {
+                    body.set('notify_enabled', '1');
+                    if (notifyEmail) body.set('notify_email', notifyEmail.value);
+                }
+
+                const resp = await fetch('index.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: body.toString()
+                });
+                const data = await resp.json().catch(function () { return null; });
+
+                if (!data || !data.ok) {
+                    if (formError) {
+                        formError.textContent = (data && data.error) ? data.error : 'Error';
+                        formError.hidden = false;
+                    }
+                    if (submitBtn) submitBtn.disabled = false;
+                    return;
+                }
+
+                // 3) Costruisci il link lato client: K_frag resta nel fragment.
+                // origin+pathname ignora query/fragment correnti -> link sempre
+                // ben formato; lo schema http/https e' ereditato da origin
+                // (quindi onion=http e clearnet=https sono gestiti in automatico).
+                const base = window.location.origin + window.location.pathname.replace(/index\.php$/, '');
+                const link = base + 'view.php?token=' + encodeURIComponent(data.token) + '#' + out.keyHex;
+
+                if (secretLink) secretLink.value = link;
+                if (resultBox)  resultBox.hidden = false;
+                snmForm.hidden = true;
+
+                if (secretLink) { secretLink.focus(); secretLink.select(); }
+            } catch (err) {
+                if (formError) {
+                    formError.textContent = 'Error';
+                    formError.hidden = false;
+                }
+                if (submitBtn) submitBtn.disabled = false;
             }
         });
-        field.addEventListener('input', function () {
-            field.setCustomValidity('');
-        });
-    });
 
-    // -------- view.php : recupera chiave dal fragment --------
-    const keyField = document.getElementById('keyField');
+        // Bottone copia link
+        const copyBtn = document.getElementById('copyBtn');
+        if (copyBtn && secretLink) {
+            attachCopyButton(copyBtn, function () { return secretLink.value; }, 2000);
+        }
+    }
+
+    // =============================================================== view.php
+
     const unlockForm = document.getElementById('unlockForm');
+    if (unlockForm) {
+        const container   = document.querySelector('.container');
+        const viewError   = document.getElementById('viewError');
+        const viewPass    = document.getElementById('viewPass');
+        const secretResult= document.getElementById('secretResult');
+        const secretBox   = document.getElementById('secretBox');
+        const D = container ? container.dataset : {};
 
-    if (keyField && unlockForm) {
+        // Leggi K_frag dal fragment (mai inviata al server)
         const rawHash = window.location.hash || '';
-        const key = rawHash.startsWith('#') ? rawHash.substring(1) : rawHash;
+        let keyHex = rawHash.startsWith('#') ? rawHash.substring(1) : rawHash;
+        if (!/^[a-fA-F0-9]{64}$/.test(keyHex)) keyHex = '';
 
-        if (/^[a-fA-F0-9]{64}$/.test(key)) {
-            keyField.value = key;
+        if (viewPass) viewPass.focus();
+
+        function showError(msg) {
+            if (viewError) { viewError.textContent = msg; viewError.hidden = false; }
         }
 
-        const pwInput = unlockForm.querySelector('input[name="view_pass"]');
-        if (pwInput) pwInput.focus();
-    }
+        // NB: il fragment con K_frag NON viene rimosso all'avvio: deve restare
+        // nell'URL finche' lo sblocco non riesce, cosi' un reload dopo password
+        // errata conserva la chiave e l'utente puo' ritentare (entro i 5 tentativi).
+        // La rimozione avviene solo dopo decifratura riuscita (vedi sotto).
 
-    // -------- view.php (success) : bottone Copia segreto --------
-    const copySecretBtn = document.getElementById('copySecretBtn');
-    const secretBoxEl   = document.getElementById('secretBox');
-    if (copySecretBtn && secretBoxEl) {
-        attachCopyButton(copySecretBtn, function () { return secretBoxEl.value; }, 2000);
-    }
+        unlockForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            if (viewError) viewError.hidden = true;
 
-    // -------- view.php (success) : pulizia URL dopo decrittazione --------
-    const secretBox = document.querySelector('textarea.secret-box');
-    if (secretBox && window.location.hash) {
-        try {
-            history.replaceState(null, '', window.location.pathname + window.location.search);
-        } catch (e) {
-            // Browser molto vecchi: ignora
-        }
+            if (!cryptoReady()) { showError(D.errCtx || 'Secure context required.'); return; }
+            if (!keyHex)        { showError(D.errKey || 'Invalid or missing key.'); return; }
+            if (!unlockForm.reportValidity()) return;
+
+            const submitBtn = unlockForm.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            try {
+                const body = new URLSearchParams();
+                body.set('token', unlockForm.querySelector('input[name="token"]').value);
+                body.set('view_pass', viewPass.value);
+
+                const resp = await fetch(window.location.pathname + window.location.search, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: body.toString()
+                });
+                const data = await resp.json().catch(function () { return null; });
+
+                if (!data || !data.ok) {
+                    // Password errata: ripresenta il form. Altri errori: stop.
+                    showError((data && data.error) ? data.error : (D.errGeneric || 'Error'));
+                    if (data && data.error === (D.errWrong || '\u0000')) {
+                        if (submitBtn) submitBtn.disabled = false;
+                        if (viewPass) { viewPass.value = ''; viewPass.focus(); }
+                    } else {
+                        // link non valido / troppi tentativi / busy: form inutile
+                        unlockForm.hidden = true;
+                    }
+                    return;
+                }
+
+                // Decifra localmente
+                let plaintext;
+                try {
+                    plaintext = await decryptSecret(keyHex, data.iv, data.ct);
+                } catch (err) {
+                    // ct gia' consumato lato server: link corrotto/incompleto
+                    showError(D.errDecrypt || 'Decryption failed.');
+                    unlockForm.hidden = true;
+                    return;
+                }
+
+                if (secretBox)    secretBox.value = plaintext;
+                unlockForm.hidden = true;
+                if (viewError)    viewError.hidden = true;
+                const heading = document.getElementById('unlockHeading');
+                if (heading)      heading.hidden = true;
+                if (secretResult) secretResult.hidden = false;
+
+                // Sblocco riuscito: ora rimuovi K_frag dall'URL (history) cosi'
+                // non resta nella barra indirizzi / cronologia dopo la lettura.
+                if (window.location.hash) {
+                    try {
+                        history.replaceState(null, '', window.location.pathname + window.location.search);
+                    } catch (e2) {}
+                }
+
+                const copySecretBtn = document.getElementById('copySecretBtn');
+                if (copySecretBtn && secretBox) {
+                    attachCopyButton(copySecretBtn, function () { return secretBox.value; }, 2000);
+                }
+            } catch (err) {
+                showError(D.errGeneric || 'Error');
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        });
+
+        // Avviso preventivo se il contesto non e' sicuro o la chiave manca
+        if (!cryptoReady()) showError(D.errCtx || 'Secure context required.');
+        else if (!keyHex)   showError(D.errKey || 'Invalid or missing key.');
     }
 })();
