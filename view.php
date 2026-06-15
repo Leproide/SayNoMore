@@ -321,21 +321,28 @@ if (!is_array($obj) || !isset($obj['iv'], $obj['ct'], $obj['hash']) || !is_strin
     snm_json(404, ['ok' => false, 'error' => t('err.link_invalid')]);
 }
 
+// Dati notifiche catturati PRIMA di qualsiasi modifica/cancellazione del file
+// (servono anche al ramo "scaduto" qui sotto).
+$notifyEmail = isset($obj['notify_email']) && is_string($obj['notify_email']) ? $obj['notify_email'] : '';
+$notifyLang  = isset($obj['lang']) && is_string($obj['lang']) ? $obj['lang'] : snm_lang();
+$notifyId    = substr($token, 0, 8);
+
 if (snm_is_expired($obj)) {
     ftruncate($fp, 0);
     flock($fp, LOCK_UN);
     fclose($fp);
     @unlink($filePath);
+    // Notifica "aperto ma scaduto": qualcuno ha aperto il link di un segreto
+    // gia' scaduto. Il contenuto non viene mostrato; il file viene rimosso.
+    // Invio deferred per non rallentare la risposta (vedi mail.php).
+    if ($notifyEmail !== '') {
+        snm_send_notification_deferred($notifyEmail, $notifyId, 'expired_open', $notifyLang);
+    }
     password_verify($inputPass, DUMMY_HASH);
     snm_json(404, ['ok' => false, 'error' => t('err.link_invalid')]);
 }
 
 $attempts = (int)($obj['attempts'] ?? 0);
-
-// Dati notifiche catturati PRIMA di modificare/cancellare il file.
-$notifyEmail = isset($obj['notify_email']) && is_string($obj['notify_email']) ? $obj['notify_email'] : '';
-$notifyLang  = isset($obj['lang']) && is_string($obj['lang']) ? $obj['lang'] : snm_lang();
-$notifyId    = substr($token, 0, 8);
 
 if ($attempts >= MAX_ATTEMPTS) {
     ftruncate($fp, 0);

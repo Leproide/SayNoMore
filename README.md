@@ -147,7 +147,7 @@ CLI output (`cleanup.php`) is always in English, since the script is intended fo
 
 ## 📬 Email notifications (optional)
 
-SayNoMore can optionally email the secret creator when the secret is read or destroyed after too many failed password attempts. The feature is **off by default** and is configured entirely in `mailconfig.php`.
+SayNoMore can optionally email the secret creator when the secret is read, destroyed after too many failed password attempts, opened after it has already expired, or expired and removed by the cleanup job. The feature is **off by default** and is configured entirely in `mailconfig.php`.
 
 ### Enable
 
@@ -183,9 +183,11 @@ Common SMTP profiles:
 - When `enabled` is `true`, a **checkbox** ("Email me when the secret is read or destroyed") appears in the secret creation form; the **email field** is shown only after the checkbox is ticked
 - While the checkbox is ticked the email field becomes required: leaving it empty or typing an invalid address shows a localized popup (in the page language); the address is also re-validated server-side
 - If the user ticks the checkbox, the address is validated and stored inside the secret payload along with the language chosen at creation time
-- Two notifications can be triggered:
+- Four notifications can be triggered (all sent to the address provided at creation time):
   - **Secret read**: sent right after the recipient successfully decrypts the secret
   - **Secret destroyed**: sent right after the secret is deleted following the maximum number of failed password attempts
+  - **Opened after expiry**: sent when someone opens the link of a secret that has **already expired** — the content is **not** shown and the file is removed (triggered from `view.php` on the unlock request)
+  - **Expired and removed**: sent when the **cron cleanup** (`cleanup.php`) deletes a secret that expired **without ever being opened**
 - The notification is localized in the same language as the creator's UI (Italian or English)
 - The email contains a short ID (first 8 characters of the token) plus date and time
 - When `enabled` is `false` the checkbox is **not shown** and the application behaves exactly as before
@@ -221,9 +223,11 @@ On every request to `index.php` or `view.php` there's a 50% chance that the serv
 Pros: zero configuration, works out of the box.
 Cons: if traffic is very low, expired files may stay on disk longer than expected before enough traffic triggers cleanup.
 
+> ⚠ **Notifications:** the probabilistic in-request cleanup removes expired secrets **silently — it does not send the "Expired and removed" email**. Only the cron job below sends that notification. If you rely on expiry notifications, run the cron (and consider disabling the in-request cleanup as shown at the end of this section); otherwise a secret purged in-request — or even one already removed in-request before an unlock request reaches it — won't generate an email.
+
 ### 2. Cron-based cleanup (optional, recommended for low-traffic services)
 
-The `cleanup.php` script is a standalone CLI job that guarantees cleanup. It is safe to run in parallel with web requests thanks to non-blocking locking (in-use files are skipped).
+The `cleanup.php` script is a standalone CLI job that guarantees cleanup. It is safe to run in parallel with web requests thanks to non-blocking locking (in-use files are skipped). When email notifications are enabled, it also sends the **"Expired and removed"** email for each expired-and-never-opened secret that carries a notification address (the send is synchronous, as there is no web client to release).
 
 **Manual test:**
 
@@ -237,11 +241,14 @@ Example output:
 [2025-01-20 03:15:02] SayNoMore cleanup:
   scanned:        42
   expired:        7
+  notified:       2
   corrupted:      0
   tmp orphans:    1
   locked skipped: 0
   errors:         0
 ```
+
+> The `notified` line counts the **"Expired and removed"** emails sent during this run: one per expired-and-never-opened secret that carried a notification address (only when email notifications are enabled in `mailconfig.php`).
 
 **Crontab (every hour at :15):**
 

@@ -42,6 +42,11 @@ const STORAGE_SUBDIR = '/data';
 const TMP_ORPHAN_TTL = 3600;
 const LEGACY_TTL_SEC = 7 * 24 * 60 * 60;
 
+// Client SMTP per le notifiche opzionali (no-op se mailconfig.php assente o
+// 'enabled' => false). Usato solo per i segreti scaduti che non sono mai stati
+// aperti e che contengono un campo notify_email valido.
+require_once __DIR__ . '/mail.php';
+
 $storage = __DIR__ . STORAGE_SUBDIR;
 
 if (!is_dir($storage)) {
@@ -59,6 +64,7 @@ $now   = time();
 $stats = [
     'scanned'        => 0,
     'expired'        => 0,
+    'notified'       => 0,
     'corrupted'      => 0,
     'tmp_orphan'     => 0,
     'locked_skipped' => 0,
@@ -129,6 +135,12 @@ while (($entry = readdir($dh)) !== false) {
     $shouldDelete = false;
     $reason       = '';
 
+    // Estratti per l'eventuale notifica (usati solo per i segreti scaduti).
+    $notifyEmail  = (is_array($obj) && isset($obj['notify_email']) && is_string($obj['notify_email']))
+        ? $obj['notify_email'] : '';
+    $notifyLang   = (is_array($obj) && isset($obj['lang']) && is_string($obj['lang']))
+        ? $obj['lang'] : 'en';
+
     if (!is_array($obj)) {
         $shouldDelete = true;
         $reason       = 'corrupted';
@@ -152,6 +164,23 @@ while (($entry = readdir($dh)) !== false) {
         @unlink($path);
         if ($reason === 'expired')   $stats['expired']++;
         if ($reason === 'corrupted') $stats['corrupted']++;
+
+        // Notifica "scaduto e rimosso": il segreto e' scaduto SENZA essere mai
+        // aperto e viene ora eliminato dal cleanup. Solo se: scaduto (non
+        // corrotto), email valida, notifiche abilitate in mailconfig.php.
+        // In CLI l'invio e' sincrono (niente deferred: non c'e' un client web
+        // da rilasciare). I fallimenti SMTP sono gestiti/loggati in mail.php e
+        // non interrompono il cleanup. tokenId = primi 8 char del nome file
+        // (il token e' il nome del file), coerente con view.php.
+        if ($reason === 'expired'
+            && $notifyEmail !== ''
+            && filter_var($notifyEmail, FILTER_VALIDATE_EMAIL)
+            && snm_mail_enabled()) {
+            $tokenId = substr($entry, 0, 8);
+            if (snm_send_notification($notifyEmail, $tokenId, 'expired_clean', $notifyLang)) {
+                $stats['notified']++;
+            }
+        }
     }
 }
 closedir($dh);
@@ -160,6 +189,7 @@ closedir($dh);
 echo "[" . date('Y-m-d H:i:s') . "] SayNoMore cleanup:\n";
 echo "  scanned:        {$stats['scanned']}\n";
 echo "  expired:        {$stats['expired']}\n";
+echo "  notified:       {$stats['notified']}\n";
 echo "  corrupted:      {$stats['corrupted']}\n";
 echo "  tmp orphans:    {$stats['tmp_orphan']}\n";
 echo "  locked skipped: {$stats['locked_skipped']}\n";

@@ -78,7 +78,7 @@ function snm_mail_debug_log(string $msg): void {
  *
  * @param string $to       Indirizzo destinatario (gia' validato dal chiamante)
  * @param string $tokenId  Identificatore breve da mostrare (es. primi 8 char del token)
- * @param string $event    'read' oppure 'destroyed'
+ * @param string $event    'read' | 'destroyed' | 'expired_open' | 'expired_clean'
  * @param string $lang     'it' o 'en' (lingua scelta alla creazione del segreto)
  * @return bool true se l'invio è stato accettato dal server SMTP
  */
@@ -98,39 +98,80 @@ function snm_send_notification(string $to, string $tokenId, string $event, strin
 
     snm_mail_debug_log("=== notification start: to={$to} event={$event} lang={$lang} id={$tokenId} ===");
 
-    $when   = date('Y-m-d H:i:s T');
-    $lang   = ($lang === 'it') ? 'it' : 'en';
-    $isRead = ($event === 'read');
+    $when = date('Y-m-d H:i:s T');
+    $lang = ($lang === 'it') ? 'it' : 'en';
+
+    // Eventi supportati (qualsiasi valore sconosciuto ricade su 'destroyed'
+    // per retrocompatibilita'):
+    //   'read'          -> segreto aperto correttamente
+    //   'destroyed'     -> distrutto dopo troppi tentativi errati
+    //   'expired_open'  -> qualcuno ha aperto il link ma il segreto era gia'
+    //                      scaduto: contenuto NON mostrato (rilevato da view.php)
+    //   'expired_clean' -> scaduto senza essere mai aperto e rimosso dal
+    //                      cleanup CLI (cleanup.php)
+    $isRead         = ($event === 'read');
+    $isExpiredOpen  = ($event === 'expired_open');
+    $isExpiredClean = ($event === 'expired_clean');
 
     // --- Soggetto + corpo testuale + frammenti per il corpo HTML ---
     // Il footer e' spezzato in prefisso/suffisso attorno al brand "SayNoMore"
     // cosi' da poterlo rendere come link al sito (vedi $brandHtml piu' sotto).
     if ($lang === 'it') {
-        $subject  = $isRead
-            ? "[SayNoMore] Segreto {$tokenId} letto"
-            : "[SayNoMore] Segreto {$tokenId} distrutto";
-        $bodyText = $isRead
-            ? "Il segreto {$tokenId} è stato aperto in data {$when}.\r\n"
-            : "Il segreto {$tokenId} è stato distrutto in data {$when} dopo troppi tentativi errati.\r\n";
-        $heading   = $isRead ? 'Segreto letto' : 'Segreto distrutto';
-        $intro     = $isRead
-            ? "Il segreto <strong>{$tokenId}</strong> è stato aperto correttamente."
-            : "Il segreto <strong>{$tokenId}</strong> è stato distrutto dopo troppi tentativi errati.";
+        if ($isRead) {
+            $subject  = "[SayNoMore] Segreto {$tokenId} letto";
+            $bodyText = "Il segreto {$tokenId} è stato aperto in data {$when}.\r\n";
+            $heading  = 'Segreto letto';
+            $intro    = "Il segreto <strong>{$tokenId}</strong> è stato aperto correttamente.";
+        } elseif ($isExpiredOpen) {
+            $subject  = "[SayNoMore] Segreto {$tokenId} aperto dopo la scadenza";
+            $bodyText = "Il link del segreto {$tokenId} è stato aperto in data {$when}, "
+                      . "ma il segreto era già scaduto: il contenuto non è stato mostrato.\r\n";
+            $heading  = 'Aperto dopo la scadenza';
+            $intro    = "Il link del segreto <strong>{$tokenId}</strong> è stato aperto, "
+                      . "ma il segreto era già scaduto e il contenuto non è stato mostrato.";
+        } elseif ($isExpiredClean) {
+            $subject  = "[SayNoMore] Segreto {$tokenId} scaduto e rimosso";
+            $bodyText = "Il segreto {$tokenId} è scaduto senza essere mai stato aperto "
+                      . "ed è stato rimosso in data {$when}.\r\n";
+            $heading  = 'Scaduto e rimosso';
+            $intro    = "Il segreto <strong>{$tokenId}</strong> è scaduto senza essere mai stato aperto "
+                      . "ed è stato rimosso.";
+        } else { // destroyed
+            $subject  = "[SayNoMore] Segreto {$tokenId} distrutto";
+            $bodyText = "Il segreto {$tokenId} è stato distrutto in data {$when} dopo troppi tentativi errati.\r\n";
+            $heading  = 'Segreto distrutto';
+            $intro    = "Il segreto <strong>{$tokenId}</strong> è stato distrutto dopo troppi tentativi errati.";
+        }
         $labelId   = 'ID segreto';
         $labelWhen = 'Data e ora';
         $footerPre = 'Notifica automatica generata da ';
         $footerEnd = '.';
     } else {
-        $subject  = $isRead
-            ? "[SayNoMore] Secret {$tokenId} read"
-            : "[SayNoMore] Secret {$tokenId} destroyed";
-        $bodyText = $isRead
-            ? "Secret {$tokenId} was opened on {$when}.\r\n"
-            : "Secret {$tokenId} was destroyed on {$when} after too many failed attempts.\r\n";
-        $heading   = $isRead ? 'Secret read' : 'Secret destroyed';
-        $intro     = $isRead
-            ? "Secret <strong>{$tokenId}</strong> has been successfully opened."
-            : "Secret <strong>{$tokenId}</strong> has been destroyed after too many failed attempts.";
+        if ($isRead) {
+            $subject  = "[SayNoMore] Secret {$tokenId} read";
+            $bodyText = "Secret {$tokenId} was opened on {$when}.\r\n";
+            $heading  = 'Secret read';
+            $intro    = "Secret <strong>{$tokenId}</strong> has been successfully opened.";
+        } elseif ($isExpiredOpen) {
+            $subject  = "[SayNoMore] Secret {$tokenId} opened after expiry";
+            $bodyText = "The link for secret {$tokenId} was opened on {$when}, "
+                      . "but the secret had already expired: its content was not shown.\r\n";
+            $heading  = 'Opened after expiry';
+            $intro    = "The link for secret <strong>{$tokenId}</strong> was opened, "
+                      . "but the secret had already expired and its content was not shown.";
+        } elseif ($isExpiredClean) {
+            $subject  = "[SayNoMore] Secret {$tokenId} expired and removed";
+            $bodyText = "Secret {$tokenId} expired without ever being opened "
+                      . "and was removed on {$when}.\r\n";
+            $heading  = 'Expired and removed';
+            $intro    = "Secret <strong>{$tokenId}</strong> expired without ever being opened "
+                      . "and was removed.";
+        } else { // destroyed
+            $subject  = "[SayNoMore] Secret {$tokenId} destroyed";
+            $bodyText = "Secret {$tokenId} was destroyed on {$when} after too many failed attempts.\r\n";
+            $heading  = 'Secret destroyed';
+            $intro    = "Secret <strong>{$tokenId}</strong> has been destroyed after too many failed attempts.";
+        }
         $labelId   = 'Secret ID';
         $labelWhen = 'Date and time';
         $footerPre = 'Automatic notification generated by ';
@@ -150,9 +191,20 @@ function snm_send_notification(string $to, string $tokenId, string $event, strin
     }
     $bodyText .= "\r\n";
 
-    // Accento coerente con la palette CSS del sito: blu per "read",
-    // rosso (error-color) per "destroyed".
-    $accent = $isRead ? '#4A76D9' : '#ff6b6b';
+    // Accento coerente con la palette CSS del sito:
+    //   blu   = read           (#4A76D9)
+    //   ambra = expired_open   (#d99a4a) qualcuno ha aperto, troppo tardi
+    //   slate = expired_clean  (#7a7f9c) scaduto e rimosso in silenzio
+    //   rosso = destroyed      (#ff6b6b) error-color
+    if ($isRead) {
+        $accent = '#4A76D9';
+    } elseif ($isExpiredOpen) {
+        $accent = '#d99a4a';
+    } elseif ($isExpiredClean) {
+        $accent = '#7a7f9c';
+    } else {
+        $accent = '#ff6b6b';
+    }
 
     // Corpo HTML: layout table-based (compatibile con tutti i client email),
     // colori in linea (gli MUA spesso strippano <style>), nessuna risorsa
@@ -261,7 +313,7 @@ function snm_send_notification(string $to, string $tokenId, string $event, strin
  *
  * @param string $to       Indirizzo destinatario
  * @param string $tokenId  Identificatore breve del segreto
- * @param string $event    'read' | 'destroyed'
+ * @param string $event    'read' | 'destroyed' | 'expired_open' | 'expired_clean'
  * @param string $lang     'it' | 'en'
  */
 function snm_send_notification_deferred(string $to, string $tokenId, string $event, string $lang = 'en'): void {
